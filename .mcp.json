@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "claide-together": {
+      "type": "http",
+      "url": "http://localhost:3456/mcp"
+    },
+    "ct-channel": {
+      "command": "npx",
+      "args": ["tsx", "src/channel.ts"],
+      "cwd": "/Users/a01-0224-0592/claide-together"
+    }
+  }
+}

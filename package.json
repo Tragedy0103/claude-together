@@ -1,0 +1,22 @@
+{
+  "name": "claide-together",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "express": "^5.2.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
