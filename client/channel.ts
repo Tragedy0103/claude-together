@@ -6,11 +6,18 @@ import {
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import http from "http";
+import https from "https";
 
 let dispatcherUrl = process.env.CT_DISPATCHER_URL ?? "";
 let apiKey = process.env.CT_API_KEY ?? "";
 
 let peerName: string | null = null;
+
+// Pick http or https based on URL protocol
+function httpFor(url: string | URL): typeof http | typeof https {
+  const u = typeof url === "string" ? new URL(url) : url;
+  return u.protocol === "https:" ? https : http;
+}
 
 // --- MCP Server (stdio) ---
 
@@ -130,7 +137,7 @@ const tools = [
   },
   {
     name: "team_status",
-    description: "Get a full overview: who is online, what they are doing, open tasks, locked files, and recent decisions.",
+    description: "Get a full overview: who is online, what they are doing, and recent decisions.",
     inputSchema: { type: "object" as const, properties: {} },
   },
 ];
@@ -147,6 +154,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   if (toolName === "reply") {
     if (!peerName) {
       return { content: [{ type: "text", text: "Error: call register first." }] };
+    }
+    if (!dispatcherUrl) {
+      return { content: [{ type: "text", text: "Error: not connected to any server. Call register first." }] };
     }
     const to = args.to || "*";
     await postJSON(`${dispatcherUrl}/channel/send`, {
@@ -165,6 +175,12 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (!dispatcherUrl) {
       return { content: [{ type: "text", text: "Error: server URL is required. Pass it as the `url` parameter." }] };
     }
+    // Validate URL format
+    try {
+      new URL(dispatcherUrl);
+    } catch {
+      return { content: [{ type: "text", text: `Error: invalid URL "${dispatcherUrl}". Must be a full URL like http://localhost:3456 or https://server.example.com` }] };
+    }
     if (args.api_key) {
       apiKey = args.api_key;
     }
@@ -180,6 +196,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   if (!peerName) {
     return { content: [{ type: "text", text: "Error: call register first." }] };
   }
+  if (!dispatcherUrl) {
+    return { content: [{ type: "text", text: "Error: not connected to any server. Call register first." }] };
+  }
   return await callAPI(toolName, args);
 });
 
@@ -188,11 +207,13 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
 async function callAPI(tool: string, args: Record<string, unknown>): Promise<{ content: { type: string; text: string }[] }> {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ peer: peerName, tool, args });
-    const parsed = new URL(`${dispatcherUrl}/api/call`);
-    const req = http.request(
+    const targetUrl = `${dispatcherUrl}/api/call`;
+    const parsed = new URL(targetUrl);
+    const transport = httpFor(parsed);
+    const req = transport.request(
       {
         hostname: parsed.hostname,
-        port: parsed.port,
+        port: parsed.port || (parsed.protocol === "https:" ? "443" : "80"),
         path: parsed.pathname,
         method: "POST",
         headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), "x-api-key": apiKey },
@@ -204,12 +225,14 @@ async function callAPI(tool: string, args: Record<string, unknown>): Promise<{ c
           try {
             resolve(JSON.parse(data));
           } catch {
-            resolve({ content: [{ type: "text", text: `Error: invalid response from server` }] });
+            resolve({ content: [{ type: "text", text: `Error: invalid response from server (status ${res.statusCode})` }] });
           }
         });
       }
     );
-    req.on("error", reject);
+    req.on("error", (e) => {
+      resolve({ content: [{ type: "text", text: `Error: connection failed — ${e.message}` }] });
+    });
     req.write(body);
     req.end();
   });
@@ -226,9 +249,10 @@ function subscribeToEvents(name: string) {
   }
 
   const url = new URL(`/channel/subscribe/${encodeURIComponent(name)}`, dispatcherUrl);
+  const transport = httpFor(url);
 
   const makeRequest = () => {
-    http.get(url.toString(), { headers: { "x-api-key": apiKey } }, (res) => {
+    transport.get(url.toString(), { headers: { "x-api-key": apiKey } }, (res) => {
       currentSSE = res;
       let buffer = "";
 
@@ -281,10 +305,11 @@ function postJSON(url: string, body: Record<string, string>): Promise<void> {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body);
     const parsed = new URL(url);
-    const req = http.request(
+    const transport = httpFor(parsed);
+    const req = transport.request(
       {
         hostname: parsed.hostname,
-        port: parsed.port,
+        port: parsed.port || (parsed.protocol === "https:" ? "443" : "80"),
         path: parsed.pathname,
         method: "POST",
         headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data), "x-api-key": apiKey },
@@ -294,7 +319,7 @@ function postJSON(url: string, body: Record<string, string>): Promise<void> {
         res.on("end", resolve);
       }
     );
-    req.on("error", reject);
+    req.on("error", () => resolve()); // don't crash on send failures
     req.write(data);
     req.end();
   });
