@@ -241,6 +241,7 @@ async function callAPI(tool: string, args: Record<string, unknown>): Promise<{ c
 // --- SSE subscription to dispatcher ---
 
 let currentSSE: http.IncomingMessage | null = null;
+let sseConnectedOnce = false;
 
 function subscribeToEvents(name: string) {
   if (currentSSE) {
@@ -264,7 +265,14 @@ function subscribeToEvents(name: string) {
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             const data = line.slice(6).trim();
-            if (data === "connected") continue;
+            if (data === "connected") {
+              // Re-register on reconnect so server knows we're online
+              if (sseConnectedOnce) {
+                callAPI("register", { name }).catch(() => {});
+              }
+              sseConnectedOnce = true;
+              continue;
+            }
             try {
               const msg = JSON.parse(data) as { from: string; content: string; timestamp: string };
               mcp.notification({
