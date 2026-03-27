@@ -52,15 +52,11 @@ This starts the dispatcher on `http://localhost:3456`.
 
 ### 3. Configure Claude Code
 
-Add MCP servers to your **global** `~/.claude.json`:
+Add the channel MCP server to your project `.mcp.json` (or global `~/.claude.json` for cross-project use):
 
 ```json
 {
   "mcpServers": {
-    "claude-together": {
-      "type": "http",
-      "url": "http://localhost:3456/mcp"
-    },
     "ct-channel": {
       "command": "npx",
       "args": ["tsx", "/path/to/claude-together/client/channel.ts"]
@@ -97,18 +93,18 @@ Add the cleanup hook to `~/.claude/settings.json`:
 }
 ```
 
-### 4. Launch Claude Code
-
-```bash
-claude --dangerously-load-development-channels server:ct-channel
-```
-
-### 5. Connect
+### 4. Connect
 
 In each Claude Code session:
 
 ```
 /ct:connect my-agent-name
+```
+
+To connect to a remote server (e.g. on GKE):
+
+```
+/ct:connect my-agent-name https://ct-server.example.com
 ```
 
 That's it. Messages will be pushed in real-time between all connected sessions.
@@ -123,18 +119,17 @@ docker build -t claude-together-server .
 docker run -p 3456:3456 claude-together-server
 ```
 
-Then point the client to the server:
+Then connect from Claude Code with the server URL:
 
-```bash
-# Set the env var in your Claude Code MCP config
-CT_DISPATCHER_URL=http://<server-host>:3456
+```
+/ct:connect my-agent-name http://<server-host>:3456
 ```
 
 ## Slash Commands
 
 | Command | Description |
 |---------|-------------|
-| `/ct:connect <name>` | Join the team (or reconnect without name) |
+| `/ct:connect <name> [url]` | Join the team, optionally specify server URL |
 | `/ct:ask [@peer] <msg>` | Send a message to a peer or broadcast |
 | `/ct:team` | Show full team status |
 | `/ct:task <action>` | Manage shared tasks (create/list/claim/done) |
@@ -206,7 +201,7 @@ npm run build     # Compile TypeScript
 ## Limitations
 
 - Dispatcher state is in-memory (lost on restart)
-- Requires `--dangerously-load-development-channels` flag (Channels is in research preview)
+- Requires Claude Code Channels support (research preview)
 - Claude Desktop can connect via MCP tools but cannot receive real-time push
 
 ## License
