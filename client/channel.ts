@@ -8,6 +8,7 @@ import {
 import http from "http";
 
 let dispatcherUrl = process.env.CT_DISPATCHER_URL ?? "http://localhost:3456";
+let apiKey = process.env.CT_API_KEY ?? "";
 
 let peerName: string | null = null;
 
@@ -43,6 +44,7 @@ const tools = [
       properties: {
         name: { type: "string", description: "Your display name, e.g. 'auth-agent' or 'api-agent'" },
         url: { type: "string", description: "Server URL to connect to, e.g. 'https://ct-server.example.com'. Defaults to CT_DISPATCHER_URL env var or http://localhost:3456" },
+        api_key: { type: "string", description: "API key for remote server authentication (x-api-key header). Not needed for local servers." },
       },
       required: ["name"],
     },
@@ -160,6 +162,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (args.url) {
       dispatcherUrl = args.url.replace(/\/+$/, ""); // strip trailing slash
     }
+    if (args.api_key) {
+      apiKey = args.api_key;
+    }
     peerName = args.name;
     // Register via /api/call
     const result = await callAPI(toolName, { name: args.name });
@@ -187,7 +192,7 @@ async function callAPI(tool: string, args: Record<string, unknown>): Promise<{ c
         port: parsed.port,
         path: parsed.pathname,
         method: "POST",
-        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), "x-api-key": apiKey },
       },
       (res) => {
         let data = "";
@@ -220,7 +225,7 @@ function subscribeToEvents(name: string) {
   const url = new URL(`/channel/subscribe/${encodeURIComponent(name)}`, dispatcherUrl);
 
   const makeRequest = () => {
-    http.get(url.toString(), (res) => {
+    http.get(url.toString(), { headers: { "x-api-key": apiKey } }, (res) => {
       currentSSE = res;
       let buffer = "";
 
@@ -279,7 +284,7 @@ function postJSON(url: string, body: Record<string, string>): Promise<void> {
         port: parsed.port,
         path: parsed.pathname,
         method: "POST",
-        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) },
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data), "x-api-key": apiKey },
       },
       (res) => {
         res.resume();

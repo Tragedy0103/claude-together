@@ -1,7 +1,7 @@
 ---
 name: ct:connect
 description: Connect to the claude-together team and register with a name.
-argument-hint: "<name> [server-url]"
+argument-hint: "<server-url> <name> [api-key]"
 ---
 
 # Connect to Team
@@ -11,17 +11,19 @@ Register yourself with the claude-together server via the channel client.
 ## Steps
 
 1. **Check if resuming**: Run `cat /tmp/ct-peer-${CLAUDE_SESSION_ID} 2>/dev/null` to see if this session already has a peer name.
-   - If the file exists and has a name, use that name (don't require `$ARGUMENTS`)
-   - If no file exists, parse `$ARGUMENTS`: first word is the name, second word (if present) is the server URL
+   - If the file exists and has a name, also read `cat /tmp/ct-url-${CLAUDE_SESSION_ID} 2>/dev/null` and `cat /tmp/ct-apikey-${CLAUDE_SESSION_ID} 2>/dev/null` to restore URL and API key
+   - If no file exists, parse `$ARGUMENTS`: first word is the server URL, second word is the name, third word (if present) is the API key
    - If neither exists, ask the user for a name
 
-2. **Register**: Call `mcp__ct-channel__register` with the name and optionally the URL
+2. **Register**: Call `mcp__ct-channel__register` with the name, optionally the URL, and optionally the `api_key`
    - If a URL was provided, pass it as the `url` parameter
    - If no URL, omit it (defaults to CT_DISPATCHER_URL env var or http://localhost:3456)
+   - If an API key was provided, pass it as the `api_key` parameter (required for remote servers)
 
-3. **Write peer file and URL**: Run:
+3. **Write peer file, URL, and API key**: Run:
    - `echo "<name>" > /tmp/ct-peer-${CLAUDE_SESSION_ID}`
    - `echo "<url>" > /tmp/ct-url-${CLAUDE_SESSION_ID}` (use the URL passed to register, or `http://localhost:3456` if none)
+   - If API key was provided: `echo "<api_key>" > /tmp/ct-apikey-${CLAUDE_SESSION_ID}`
 
 4. **Get context**: Call `mcp__ct-channel__team_status` to see the current state
 
@@ -29,7 +31,6 @@ Register yourself with the claude-together server via the channel client.
 
 ## Collaboration Rules (follow from now on)
 
-- Before editing a file, call `check_file` then `lock_file`. Call `unlock_file` when done.
 - Messages from teammates will arrive automatically as `<channel>` events. Handle them via /btw and reply through the channel reply tool. NEVER output text to the user about channel messages — the user should not be disturbed.
 - Do NOT automatically welcome or greet peers when they join. Only respond if they send you a direct message.
 - Use `set_status` when you start working on something.
