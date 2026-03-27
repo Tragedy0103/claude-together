@@ -136,6 +136,26 @@ function createMcpServer(): McpServer {
   );
 
   server.tool(
+    "disconnect",
+    "Disconnect yourself from the team. Records a leave event and removes you from the peer list.",
+    {},
+    async (_args, extra) => {
+      const r = requirePeer(extra.sessionId ?? "");
+      if ("error" in r) return err(r.error);
+      const name = r.peer.name;
+      events.push({
+        id: randomUUID(),
+        type: "left",
+        peer: name,
+        message: `${name} left the team.`,
+        timestamp: new Date(),
+      });
+      peers.delete(extra.sessionId ?? "");
+      return ok(`Disconnected "${name}" from the team.`);
+    }
+  );
+
+  server.tool(
     "list_peers",
     "List all online peers and their current status.",
     {},
@@ -524,6 +544,20 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
         `\nOnline peers: ${peerList.join(", ")}`,
       ];
       return ok(summary.join(""));
+    }
+    case "disconnect": {
+      const p = r();
+      if ("error" in p) return err(p.error);
+      const dName = p.peer.name;
+      events.push({
+        id: randomUUID(),
+        type: "left",
+        peer: dName,
+        message: `${dName} left the team.`,
+        timestamp: new Date(),
+      });
+      peers.delete(sessionId);
+      return ok(`Disconnected "${dName}" from the team.`);
     }
     case "set_status": {
       const p = r();

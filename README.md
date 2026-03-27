@@ -130,6 +130,7 @@ Then connect from Claude Code with the server URL:
 | Command | Description |
 |---------|-------------|
 | `/ct:connect <name> [url]` | Join the team, optionally specify server URL |
+| `/ct:disconnect` | Leave the team and clean up |
 | `/ct:ask [@peer] <msg>` | Send a message to a peer or broadcast |
 | `/ct:team` | Show full team status |
 | `/ct:decide [decision]` | Post or list shared decisions |
@@ -159,7 +160,7 @@ Works across different projects. Any Claude Code session with the global MCP con
 
 | Category | Tools |
 |----------|-------|
-| Identity | `register`, `set_status`, `list_peers` |
+| Identity | `register`, `disconnect`, `set_status`, `list_peers` |
 | Messaging | `send_message`, `broadcast` |
 | Events | `event` (query join/leave lifecycle events) |
 | Decisions | `post_decision`, `list_decisions` |

@@ -69,6 +69,11 @@ const tools = [
     },
   },
   {
+    name: "disconnect",
+    description: "Disconnect yourself from the team. Records a leave event and removes you from the peer list.",
+    inputSchema: { type: "object" as const, properties: {} },
+  },
+  {
     name: "set_status",
     description: "Update your current status so others know what you are working on.",
     inputSchema: {
@@ -189,6 +194,22 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     const result = await callAPI(toolName, { name: args.name });
     // Start listening for events
     subscribeToEvents(peerName);
+    return result;
+  }
+
+  // "disconnect" needs cleanup after server call
+  if (toolName === "disconnect") {
+    if (!peerName) {
+      return { content: [{ type: "text", text: "Error: not connected." }] };
+    }
+    const result = await callAPI("disconnect", {});
+    // Clean up local state
+    if (currentSSE) {
+      currentSSE.destroy();
+      currentSSE = null;
+    }
+    peerName = null;
+    sseConnectedOnce = false;
     return result;
   }
 

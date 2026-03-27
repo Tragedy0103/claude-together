@@ -31,7 +31,7 @@ No test framework is configured.
 Peer-to-peer collaboration system for Claude Code instances. Two components:
 
 **Server** (`server/server.ts`) — Express HTTP app + MCP server. Single process holding all shared state in memory (peers, messages, decisions, lifecycle events). Exposes:
-- `/mcp` — Streamable HTTP MCP transport (register, messaging, decisions, events)
+- `/mcp` — Streamable HTTP MCP transport (register, disconnect, messaging, decisions, events)
 - `/channel/subscribe/:peerName` — SSE endpoint for real-time message push
 - `/channel/send` — HTTP POST for channel clients to inject messages
 - `/api/call` — REST proxy that executes MCP tools without MCP protocol overhead
@@ -41,6 +41,7 @@ All routes are prefixed by `BASE_PATH` env var if set.
 
 **Client** (`client/channel.ts`) — stdio MCP server bridging Claude Code ↔ Server. Exposes the same tool names as the server but proxies them over HTTP. Special behaviors:
 - `register` — stores server URL, subscribes to SSE, auto-reconnects on disconnect
+- `disconnect` — calls server then cleans up local SSE and state
 - `reply` — sends via `/channel/send` (not `/api/call`)
 - All other tools → `POST /api/call`
 
@@ -58,7 +59,7 @@ All routes are prefixed by `BASE_PATH` env var if set.
 
 ## Skills (`.claude/skills/`)
 
-Skills are slash commands for Claude Code integration: `ct:connect`, `ct:ask`, `ct:decide`, `ct:team`, `ct:install`. They are copied to `~/.claude/skills/` for global use via `/ct:install`.
+Skills are slash commands for Claude Code integration: `ct:connect`, `ct:disconnect`, `ct:ask`, `ct:decide`, `ct:team`, `ct:install`. They are copied to `~/.claude/skills/` for global use via `/ct:install`.
 
 首次安裝請在 Claude Code 中執行 `/ct:install`，會自動完成 MCP 設定、skills 複製、hooks 註冊等全域配置。
 
