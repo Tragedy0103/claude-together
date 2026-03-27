@@ -102,21 +102,13 @@ function createMcpServer(): McpServer {
         status: "idle",
         registeredAt: new Date(),
       });
-      // Record and broadcast join event
+      // Record join event (no broadcast — peers can query via `event` tool)
       events.push({
         id: randomUUID(),
         type: "joined",
         peer: args.name,
         message: `${args.name} joined the team.`,
         timestamp: new Date(),
-      });
-      messages.push({
-        id: randomUUID(),
-        from: "system",
-        to: "*",
-        content: `${args.name} joined the team.`,
-        timestamp: new Date(),
-        readBy: new Set([args.name]),
       });
       // Return current team state so the new peer has context
       const peerList = Array.from(peers.values()).map((p) => `${p.name} (${p.status})`);
@@ -343,21 +335,13 @@ router.post("/mcp", async (req, res) => {
       const peer = peers.get(sid);
       if (peer) {
         console.log(`[-] Peer disconnected: ${peer.name}`);
-        // Record leave event and broadcast
+        // Record leave event (no broadcast)
         events.push({
           id: randomUUID(),
           type: "left",
           peer: peer.name,
           message: `${peer.name} left the team.`,
           timestamp: new Date(),
-        });
-        messages.push({
-          id: randomUUID(),
-          from: "system",
-          to: "*",
-          content: `${peer.name} left the team.`,
-          timestamp: new Date(),
-          readBy: new Set(),
         });
         peers.delete(sid);
       }
@@ -526,21 +510,13 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
         status: "idle",
         registeredAt: new Date(),
       });
-      // Record and broadcast join event
+      // Record join event (no broadcast)
       events.push({
         id: randomUUID(),
         type: "joined",
         peer: name,
         message: `${name} joined the team.`,
         timestamp: new Date(),
-      });
-      messages.push({
-        id: randomUUID(),
-        from: "system",
-        to: "*",
-        content: `${name} joined the team.`,
-        timestamp: new Date(),
-        readBy: new Set([name]),
       });
       const peerList = Array.from(peers.values()).map((p) => `${p.name} (${p.status})`);
       const summary = [
