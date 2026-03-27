@@ -49,11 +49,12 @@ const tools = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        name: { type: "string", description: "Your display name, e.g. 'auth-agent' or 'api-agent'" },
-        url: { type: "string", description: "Server URL to connect to, e.g. 'http://localhost:3456' or 'https://ct-server.example.com'" },
-        api_key: { type: "string", description: "API key for remote server authentication (x-api-key header). Not needed for local servers." },
+        name: { type: "string", description: "Your display name, e.g. 'auth-agent' or 'api-agent'. Optional if resuming via session_id." },
+        url: { type: "string", description: "Server URL to connect to. Optional if resuming via session_id." },
+        api_key: { type: "string", description: "API key for remote server authentication. Not needed for local servers." },
+        session_id: { type: "string", description: "Claude session ID (CLAUDE_SESSION_ID). Used to save/resume session state." },
       },
-      required: ["name", "url"],
+      required: ["session_id"],
     },
   },
   {
@@ -174,6 +175,19 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
 
   // "register" needs special handling: set URL, register, subscribe to SSE
   if (toolName === "register") {
+    const fs = await import("fs");
+    const sessionFile = args.session_id ? `/tmp/ct-session-${args.session_id}.json` : null;
+
+    // Resume from session file if only session_id is provided (no name/url)
+    if (!args.name && !args.url && sessionFile) {
+      try {
+        const saved = JSON.parse(fs.readFileSync(sessionFile, "utf-8"));
+        if (saved.name) args.name = saved.name;
+        if (saved.url) args.url = saved.url;
+        if (saved.apikey) args.api_key = saved.apikey;
+      } catch { /* no saved state */ }
+    }
+
     if (args.url) {
       dispatcherUrl = args.url.replace(/\/+$/, ""); // strip trailing slash
     }
@@ -189,11 +203,21 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (args.api_key) {
       apiKey = args.api_key;
     }
+    if (!args.name) {
+      return { content: [{ type: "text", text: "Error: name is required. Pass it as the `name` parameter, or provide `session_id` to resume." }] };
+    }
     peerName = args.name;
     // Register via /api/call
     const result = await callAPI(toolName, { name: args.name });
     // Start listening for events
     subscribeToEvents(peerName);
+    // Write session state file
+    if (sessionFile) {
+      try {
+        const state = JSON.stringify({ name: peerName, url: dispatcherUrl, apikey: apiKey || "" });
+        fs.writeFileSync(sessionFile, state);
+      } catch { /* ignore write errors */ }
+    }
     return result;
   }
 

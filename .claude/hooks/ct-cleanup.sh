@@ -5,15 +5,16 @@
 input=$(cat)
 session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null)
 
-if [ -n "$session_id" ]; then
-  # Read peer name and URL from temp files
-  peer_name=$(cat "/tmp/ct-peer-${session_id}" 2>/dev/null)
-  ct_url=$(cat "/tmp/ct-url-${session_id}" 2>/dev/null)
-  ct_url="${ct_url:-http://localhost:3456}"
-  ct_apikey=$(cat "/tmp/ct-apikey-${session_id}" 2>/dev/null)
+SESSION_FILE="/tmp/ct-session-${session_id}.json"
+
+if [ -n "$session_id" ] && [ -f "$SESSION_FILE" ]; then
+  # Read session state from JSON
+  peer_name=$(jq -r '.name // empty' "$SESSION_FILE" 2>/dev/null)
+  ct_url=$(jq -r '.url // empty' "$SESSION_FILE" 2>/dev/null)
+  ct_apikey=$(jq -r '.apikey // empty' "$SESSION_FILE" 2>/dev/null)
 
   # Disconnect from dispatcher via disconnect tool
-  if [ -n "$peer_name" ]; then
+  if [ -n "$peer_name" ] && [ -n "$ct_url" ]; then
     curl -s -X POST "${ct_url}/api/call" \
       -H "Content-Type: application/json" \
       -H "x-api-key: ${ct_apikey}" \
@@ -21,8 +22,8 @@ if [ -n "$session_id" ]; then
       2>/dev/null || true
   fi
 
-  # Remove temp files
-  rm -f "/tmp/ct-peer-${session_id}" "/tmp/ct-url-${session_id}" "/tmp/ct-apikey-${session_id}" 2>/dev/null
+  # Remove session file
+  rm -f "$SESSION_FILE" 2>/dev/null
 fi
 
 exit 0
