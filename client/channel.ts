@@ -298,7 +298,7 @@ function subscribeToEvents(name: string) {
     currentSSE = null;
   }
 
-  const url = new URL(`/channel/subscribe/${encodeURIComponent(name)}`, DISPATCHER_URL);
+  const url = new URL(`/channel/subscribe/${encodeURIComponent(name)}`, dispatcherUrl);
 
   const makeRequest = () => {
     http.get(url.toString(), (res) => {

@@ -19,7 +19,9 @@ Register yourself with the claude-together server via the channel client.
    - If a URL was provided, pass it as the `url` parameter
    - If no URL, omit it (defaults to CT_DISPATCHER_URL env var or http://localhost:3456)
 
-3. **Write peer file**: Run `echo "<name>" > /tmp/ct-peer-${CLAUDE_SESSION_ID}` so the status bar can show it
+3. **Write peer file and URL**: Run:
+   - `echo "<name>" > /tmp/ct-peer-${CLAUDE_SESSION_ID}`
+   - `echo "<url>" > /tmp/ct-url-${CLAUDE_SESSION_ID}` (use the URL passed to register, or `http://localhost:3456` if none)
 
 4. **Get context**: Call `mcp__ct-channel__team_status` to see the current state
 
