@@ -913,7 +913,39 @@ app.get("/health", (_req, res) => {
 });
 
 const PORT = parseInt(process.env.PORT ?? "3456", 10);
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`claude-together MCP server running on http://localhost:${PORT}/mcp`);
   console.log(`Health check: http://localhost:${PORT}/health`);
 });
+
+// Graceful shutdown: notify all subscribers before exiting
+function gracefulShutdown(signal: string) {
+  console.log(`\n[${signal}] Shutting down...`);
+
+  // Broadcast shutdown message to all SSE subscribers
+  const event = JSON.stringify({
+    from: "system",
+    content: "⚠️ Server is shutting down. You are now disconnected.",
+    timestamp: new Date().toISOString(),
+  });
+  for (const [, sub] of channelSubscribers.entries()) {
+    try {
+      sub.res.write(`data: ${event}\n\n`);
+      sub.res.end();
+    } catch {
+      // ignore write errors on already-closed connections
+    }
+  }
+
+  // Close HTTP server and exit
+  server.close(() => {
+    console.log("Server closed.");
+    process.exit(0);
+  });
+
+  // Force exit after 3s if connections don't close
+  setTimeout(() => process.exit(1), 3000);
+}
+
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
