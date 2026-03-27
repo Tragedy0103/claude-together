@@ -10,10 +10,10 @@ Register yourself with the claude-together server via the channel client.
 
 ## Steps
 
-1. **Check if resuming**: Run `cat /tmp/ct-peer-${CLAUDE_SESSION_ID} 2>/dev/null` to see if this session already has a peer name.
-   - If the file exists and has a name, also read `cat /tmp/ct-url-${CLAUDE_SESSION_ID} 2>/dev/null` and `cat /tmp/ct-apikey-${CLAUDE_SESSION_ID} 2>/dev/null` to restore URL and API key
-   - If no file exists, parse `$ARGUMENTS`: first word is the server URL, second word is the name, third word (if present) is the API key
-   - If neither exists, or if URL is missing, ask the user for the server URL and name
+1. **Parse arguments**: Parse `$ARGUMENTS` first — if the user provided arguments, they take priority over any saved state.
+   - Format: first word is the server URL, second word is the name, third word (if present) is the API key
+   - If `$ARGUMENTS` is empty, check if resuming: read `cat /tmp/ct-peer-${CLAUDE_SESSION_ID} 2>/dev/null`, `cat /tmp/ct-url-${CLAUDE_SESSION_ID} 2>/dev/null`, and `cat /tmp/ct-apikey-${CLAUDE_SESSION_ID} 2>/dev/null`
+   - If neither arguments nor saved state exist, ask the user for the server URL and name
 
 2. **Register**: Call `mcp__ct-channel__register` with the name, URL (required), and optionally the `api_key`
    - **CRITICAL: 將使用者提供的 URL 原封不動傳入 `url` 參數，不可截斷、修改、或省略任何路徑段。** URL 可能包含多層路徑（如 `https://host/path1/path2/path3`），每一段都有意義。
