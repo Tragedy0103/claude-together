@@ -5,6 +5,5 @@ description: Show full team status - peers, tasks, locks, decisions.
 
 # Team Status
 
-1. Call `team_status` to get the full overview
-2. Call `receive_messages` to check for unread messages
-3. Present everything clearly to the user
+1. Call `mcp__ct-channel__team_status` to get the full overview
+2. Present everything clearly to the user

@@ -624,6 +624,284 @@ messages.push = (...items: Message[]) => {
   return result;
 };
 
+// REST proxy endpoint — allows channel clients to call MCP tools via HTTP
+app.post("/api/call", async (req, res) => {
+  const { peer, tool, args } = req.body as { peer: string; tool: string; args: Record<string, unknown> };
+  if (!peer || !tool) {
+    res.status(400).json({ error: "Missing peer or tool" });
+    return;
+  }
+
+  // Find or create a virtual session for this peer
+  let sessionId: string | null = null;
+  for (const [sid, p] of peers.entries()) {
+    if (p.name === peer) {
+      sessionId = sid;
+      break;
+    }
+  }
+  if (!sessionId) {
+    // Auto-register the peer with a virtual session
+    sessionId = `api-${peer}-${randomUUID()}`;
+    peers.set(sessionId, {
+      name: peer,
+      sessionId,
+      status: "idle",
+      registeredAt: new Date(),
+    });
+  }
+
+  // Execute the tool logic directly
+  try {
+    const result = await executeToolDirect(sessionId, tool, args ?? {});
+    res.json(result);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Direct tool execution (bypasses MCP transport)
+async function executeToolDirect(sessionId: string, tool: string, args: Record<string, unknown>): Promise<{ content: { type: string; text: string }[] }> {
+  const r = () => {
+    const peer = peers.get(sessionId);
+    if (!peer) return { error: "Not registered." };
+    return { peer };
+  };
+
+  switch (tool) {
+    case "register": {
+      const name = args.name as string;
+      const existing = getPeerByName(name);
+      if (existing && existing.sessionId !== sessionId) {
+        peers.delete(existing.sessionId);
+      }
+      peers.set(sessionId, {
+        name,
+        sessionId,
+        status: "idle",
+        registeredAt: new Date(),
+      });
+      const peerList = Array.from(peers.values()).map((p) => `${p.name} (${p.status})`);
+      const openTasks = Array.from(tasks.values()).filter((t) => t.status !== "done");
+      const summary = [
+        `Registered as "${name}".`,
+        `\nOnline peers: ${peerList.join(", ")}`,
+        openTasks.length > 0
+          ? `\nOpen tasks:\n${openTasks.map((t) => `  [${t.id}] ${t.title} (${t.status}, assignee: ${t.assignee ?? "none"})`).join("\n")}`
+          : "\nNo open tasks.",
+      ];
+      return ok(summary.join(""));
+    }
+    case "set_status": {
+      const p = r();
+      if ("error" in p) return err(p.error);
+      p.peer.status = args.status as string;
+      return ok(`Status updated to: "${args.status}"`);
+    }
+    case "list_peers": {
+      const list = Array.from(peers.values());
+      if (list.length === 0) return ok("No peers online.");
+      const lines = list.map((p) => `  ${p.name}: ${p.status}`);
+      return ok(`Online peers:\n${lines.join("\n")}`);
+    }
+    case "send_message": {
+      const p = r();
+      if ("error" in p) return err(p.error);
+      if (!getPeerByName(args.to as string)) return err(`Peer "${args.to}" not found.`);
+      messages.push({
+        id: randomUUID(),
+        from: p.peer.name,
+        to: args.to as string,
+        content: args.message as string,
+        timestamp: new Date(),
+        readBy: new Set([p.peer.name]),
+      });
+      return ok(`Message sent to "${args.to}".`);
+    }
+    case "broadcast": {
+      const p = r();
+      if ("error" in p) return err(p.error);
+      messages.push({
+        id: randomUUID(),
+        from: p.peer.name,
+        to: "*",
+        content: args.message as string,
+        timestamp: new Date(),
+        readBy: new Set([p.peer.name]),
+      });
+      return ok("Message broadcast to all peers.");
+    }
+    case "create_task": {
+      const p = r();
+      if ("error" in p) return err(p.error);
+      const id = `task-${tasks.size + 1}`;
+      const now = new Date();
+      tasks.set(id, {
+        id,
+        title: args.title as string,
+        description: args.description as string,
+        status: (args.assignee as string) ? "in_progress" : "open",
+        assignee: (args.assignee as string) ?? null,
+        createdBy: p.peer.name,
+        createdAt: now,
+        updatedAt: now,
+      });
+      messages.push({
+        id: randomUUID(),
+        from: "system",
+        to: "*",
+        content: `New task [${id}]: "${args.title}"${args.assignee ? ` (assigned to ${args.assignee})` : ""}`,
+        timestamp: now,
+        readBy: new Set([p.peer.name]),
+      });
+      return ok(`Task created: [${id}] ${args.title}`);
+    }
+    case "list_tasks": {
+      const filter = (args.status as string) ?? "all";
+      let list = Array.from(tasks.values());
+      if (filter !== "all") list = list.filter((t) => t.status === filter);
+      if (list.length === 0) return ok(`No tasks${filter !== "all" ? ` with status "${filter}"` : ""}.`);
+      const lines = list.map(
+        (t) => `  [${t.id}] ${t.title} | ${t.status} | assignee: ${t.assignee ?? "none"} | by: ${t.createdBy}`
+      );
+      return ok(`Tasks:\n${lines.join("\n")}`);
+    }
+    case "claim_task": {
+      const p = r();
+      if ("error" in p) return err(p.error);
+      const task = tasks.get(args.task_id as string);
+      if (!task) return err(`Task "${args.task_id}" not found.`);
+      if (task.assignee && task.assignee !== p.peer.name) {
+        return err(`Task already assigned to "${task.assignee}".`);
+      }
+      task.assignee = p.peer.name;
+      task.status = "in_progress";
+      task.updatedAt = new Date();
+      return ok(`Task [${task.id}] assigned to you.`);
+    }
+    case "update_task": {
+      const p = r();
+      if ("error" in p) return err(p.error);
+      const task = tasks.get(args.task_id as string);
+      if (!task) return err(`Task "${args.task_id}" not found.`);
+      if (args.status) task.status = args.status as Task["status"];
+      if (args.description) task.description = args.description as string;
+      task.updatedAt = new Date();
+      if (args.status) {
+        messages.push({
+          id: randomUUID(),
+          from: "system",
+          to: "*",
+          content: `Task [${task.id}] "${task.title}" → ${args.status} (by ${p.peer.name})`,
+          timestamp: new Date(),
+          readBy: new Set([p.peer.name]),
+        });
+      }
+      return ok(`Task [${task.id}] updated.`);
+    }
+    case "lock_file": {
+      const p = r();
+      if ("error" in p) return err(p.error);
+      const existing = fileLocks.get(args.path as string);
+      if (existing && existing.owner !== p.peer.name) {
+        return err(`File "${args.path}" is locked by "${existing.owner}" (reason: ${existing.reason}).`);
+      }
+      fileLocks.set(args.path as string, {
+        path: args.path as string,
+        owner: p.peer.name,
+        lockedAt: new Date(),
+        reason: (args.reason as string) ?? "editing",
+      });
+      return ok(`File "${args.path}" locked by you.`);
+    }
+    case "unlock_file": {
+      const p = r();
+      if ("error" in p) return err(p.error);
+      const lock = fileLocks.get(args.path as string);
+      if (!lock) return ok(`File "${args.path}" is not locked.`);
+      if (lock.owner !== p.peer.name) return err(`File is locked by "${lock.owner}", not you.`);
+      fileLocks.delete(args.path as string);
+      return ok(`File "${args.path}" unlocked.`);
+    }
+    case "check_file": {
+      const lock = fileLocks.get(args.path as string);
+      if (!lock) return ok(`File "${args.path}" is free.`);
+      return ok(`File "${args.path}" is locked by "${lock.owner}" since ${lock.lockedAt.toISOString()} (reason: ${lock.reason}).`);
+    }
+    case "list_locks": {
+      const locks = Array.from(fileLocks.values());
+      if (locks.length === 0) return ok("No files are locked.");
+      const lines = locks.map((l) => `  ${l.path} → ${l.owner} (${l.reason})`);
+      return ok(`Locked files:\n${lines.join("\n")}`);
+    }
+    case "post_decision": {
+      const p = r();
+      if ("error" in p) return err(p.error);
+      const decision: Decision = {
+        id: randomUUID(),
+        title: args.title as string,
+        content: args.content as string,
+        createdBy: p.peer.name,
+        createdAt: new Date(),
+      };
+      decisions.push(decision);
+      messages.push({
+        id: randomUUID(),
+        from: "system",
+        to: "*",
+        content: `New decision: "${args.title}" — ${args.content}`,
+        timestamp: new Date(),
+        readBy: new Set([p.peer.name]),
+      });
+      return ok(`Decision posted: "${args.title}"`);
+    }
+    case "list_decisions": {
+      if (decisions.length === 0) return ok("No decisions recorded.");
+      const lines = decisions.map(
+        (d) => `  [${d.createdAt.toISOString()}] ${d.createdBy}: ${d.title}\n    ${d.content}`
+      );
+      return ok(`Decisions:\n${lines.join("\n")}`);
+    }
+    case "team_status": {
+      const sections: string[] = [];
+      const peerList = Array.from(peers.values());
+      sections.push("## Peers");
+      if (peerList.length === 0) {
+        sections.push("  (none)");
+      } else {
+        for (const p of peerList) sections.push(`  ${p.name}: ${p.status}`);
+      }
+      const openTasks = Array.from(tasks.values()).filter((t) => t.status !== "done");
+      sections.push("\n## Open Tasks");
+      if (openTasks.length === 0) {
+        sections.push("  (none)");
+      } else {
+        for (const t of openTasks) {
+          sections.push(`  [${t.id}] ${t.title} | ${t.status} | assignee: ${t.assignee ?? "none"}`);
+        }
+      }
+      const locks = Array.from(fileLocks.values());
+      sections.push("\n## Locked Files");
+      if (locks.length === 0) {
+        sections.push("  (none)");
+      } else {
+        for (const l of locks) sections.push(`  ${l.path} → ${l.owner}`);
+      }
+      sections.push("\n## Recent Decisions");
+      const recent = decisions.slice(-5);
+      if (recent.length === 0) {
+        sections.push("  (none)");
+      } else {
+        for (const d of recent) sections.push(`  - ${d.title} (${d.createdBy})`);
+      }
+      return ok(sections.join("\n"));
+    }
+    default:
+      return err(`Unknown tool: ${tool}`);
+  }
+}
+
 app.get("/health", (_req, res) => {
   res.json({
     status: "ok",

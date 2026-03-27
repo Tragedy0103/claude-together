@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "claude-together": {
-      "type": "http",
-      "url": "http://localhost:3456/mcp"
-    },
     "ct-channel": {
       "command": "npx",
       "args": ["tsx", "client/channel.ts"]

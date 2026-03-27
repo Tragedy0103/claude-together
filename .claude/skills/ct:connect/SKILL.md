@@ -1,29 +1,29 @@
 ---
 name: ct:connect
 description: Connect to the claude-together team and register with a name.
-argument-hint: "<name>"
+argument-hint: "<name> [server-url]"
 ---
 
 # Connect to Team
 
-Register yourself with the claude-together MCP server and channel.
+Register yourself with the claude-together server via the channel client.
 
 ## Steps
 
 1. **Check if resuming**: Run `cat /tmp/ct-peer-${CLAUDE_SESSION_ID} 2>/dev/null` to see if this session already has a peer name.
    - If the file exists and has a name, use that name (don't require `$ARGUMENTS`)
-   - If no file exists, use the name from `$ARGUMENTS`
+   - If no file exists, parse `$ARGUMENTS`: first word is the name, second word (if present) is the server URL
    - If neither exists, ask the user for a name
 
-2. **Register on HTTP MCP server**: Call `mcp__claude-together__register` with the name
+2. **Register**: Call `mcp__ct-channel__register` with the name and optionally the URL
+   - If a URL was provided, pass it as the `url` parameter
+   - If no URL, omit it (defaults to CT_DISPATCHER_URL env var or http://localhost:3456)
 
-3. **Register on channel**: Call `mcp__ct-channel__register` with the same name (this subscribes to real-time message push)
+3. **Write peer file**: Run `echo "<name>" > /tmp/ct-peer-${CLAUDE_SESSION_ID}` so the status bar can show it
 
-4. **Write peer file**: Run `echo "<name>" > /tmp/ct-peer-${CLAUDE_SESSION_ID}` so the status bar can show it
+4. **Get context**: Call `mcp__ct-channel__team_status` to see the current state
 
-5. **Get context**: Call `mcp__claude-together__team_status` to see the current state
-
-6. **Set status**: Call `mcp__claude-together__set_status` with "just connected"
+5. **Set status**: Call `mcp__ct-channel__set_status` with "just connected"
 
 ## Collaboration Rules (follow from now on)
 
