@@ -42,10 +42,11 @@ Set up claude-together for global use across all Claude Code projects.
    cp -r $CT_PATH/.claude/skills/ct:session-rules ~/.claude/skills/
    ```
 
-5. **Copy cleanup hook**:
+5. **Copy hooks**:
    ```bash
    mkdir -p ~/.claude/hooks
    cp $CT_PATH/.claude/hooks/ct-cleanup.sh ~/.claude/hooks/
+   cp $CT_PATH/.claude/hooks/ct-register.sh ~/.claude/hooks/
    ```
 
 6. **Add MCP server to global settings**: Read `~/.claude/settings.json` (create if not exists). Merge in:
@@ -57,6 +58,18 @@ Set up claude-together for global use across all Claude Code projects.
      }
      ```
      Replace `$CT_PATH` with the actual absolute path.
+   - Under `hooks.PostToolUse`, add (if not already present):
+     ```json
+     {
+       "matcher": "mcp__ct-channel__register",
+       "hooks": [
+         {
+           "type": "command",
+           "command": "sh ~/.claude/hooks/ct-register.sh"
+         }
+       ]
+     }
+     ```
    - Under `hooks.SessionEnd`, add (if not already present):
      ```json
      {

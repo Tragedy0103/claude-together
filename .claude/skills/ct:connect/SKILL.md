@@ -18,15 +18,11 @@ Register yourself with the claude-together server via the channel client.
 2. **Register**: Call `mcp__ct-channel__register` with the name, URL (required), and optionally the `api_key`
    - The `url` parameter is **required** — there is no default. If no URL was provided in arguments or resume files, ask the user for it.
    - If an API key was provided, pass it as the `api_key` parameter (required for remote servers)
+   - Tmp files (`ct-peer`, `ct-url`, `ct-apikey`) are automatically written by the PostToolUse hook — do NOT write them manually.
 
-3. **Write peer file, URL, and API key** (ALWAYS do this, even when resuming from existing files): Run:
-   - `echo "<name>" > /tmp/ct-peer-${CLAUDE_SESSION_ID}`
-   - `echo "<url>" > /tmp/ct-url-${CLAUDE_SESSION_ID}` (use the URL passed to register, or `http://localhost:3456` if none)
-   - If API key was provided: `echo "<api_key>" > /tmp/ct-apikey-${CLAUDE_SESSION_ID}`
+3. **Get context**: Call `mcp__ct-channel__team_status` to see the current state
 
-4. **Get context**: Call `mcp__ct-channel__team_status` to see the current state
-
-5. **Set status**: Call `mcp__ct-channel__set_status` with "just connected"
+4. **Set status**: Call `mcp__ct-channel__set_status` with "just connected"
 
 ## Collaboration Rules (follow from now on)
 
