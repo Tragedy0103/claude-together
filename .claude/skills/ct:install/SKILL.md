@@ -11,20 +11,21 @@ Set up claude-together for global use across all Claude Code projects.
 
 1. **Detect project path**: The claude-together repo is at the current working directory. Store this as `$CT_PATH`.
 
-2. **Install dependencies**:
+2. **Install client dependencies** (一般使用者只需要 client，server 不在此安裝):
    ```bash
-   cd $CT_PATH && npm run install:all
+   cd $CT_PATH && npm run install:client
    ```
+   > **注意：** 此安裝只包含 client（channel）。Server 需要另外部署（Docker / GKE），不會在本機啟動。如需自行架設 server，請參閱 README.md 的 Docker Deployment 章節。
 
 3. **Ask user about global setup**: Before proceeding, explain to the user what global setup will do and ask for confirmation:
 
    > 接下來需要進行全域設定，這會修改 `~/.claude/` 底下的檔案：
    >
    > **為什麼需要全域設定？**
-   > claude-together 的 skills（如 `/ct:connect`、`/session-rules`）和 MCP server 設定需要安裝到全域 `~/.claude/` 目錄，這樣你在**任何專案**中開啟 Claude Code 都能使用這些功能。如果只放在專案內，其他專案的 session 就無法加入團隊協作。
+   > claude-together 的 skills（如 `/ct:connect`、`/ct:session-rules`）和 MCP server 設定需要安裝到全域 `~/.claude/` 目錄，這樣你在**任何專案**中開啟 Claude Code 都能使用這些功能。如果只放在專案內，其他專案的 session 就無法加入團隊協作。
    >
    > **具體會做什麼？**
-   > - 複製 skills 到 `~/.claude/skills/`（ct:connect, ct:disconnect, ct:ask, ct:decide, ct:team, session-rules, session-memory）
+   > - 複製 skills 到 `~/.claude/skills/`（ct:connect, ct:disconnect, ct:ask, ct:decide, ct:team, ct:session-rules, ct:session-memory）
    > - 複製 cleanup hook 到 `~/.claude/hooks/`
    > - 在 `~/.claude/settings.json` 加入 MCP server 和 SessionEnd hook 設定
    > - 在 `~/.claude/CLAUDE.md` 加入 channel 安全政策和 session rules/memory 使用說明
@@ -37,8 +38,8 @@ Set up claude-together for global use across all Claude Code projects.
    ```bash
    mkdir -p ~/.claude/skills
    cp -r $CT_PATH/.claude/skills/ct:* ~/.claude/skills/
-   cp -r $CT_PATH/.claude/skills/session-memory ~/.claude/skills/
-   cp -r $CT_PATH/.claude/skills/session-rules ~/.claude/skills/
+   cp -r $CT_PATH/.claude/skills/ct:session-memory ~/.claude/skills/
+   cp -r $CT_PATH/.claude/skills/ct:session-rules ~/.claude/skills/
    ```
 
 5. **Copy cleanup hook**:
@@ -97,10 +98,10 @@ Set up claude-together for global use across all Claude Code projects.
    Session rules 是當前 session 內的**硬性規則**，**每次回覆前必須讀取** `/tmp/claude-session-rules-${CLAUDE_SESSION_ID}.md`（如果存在）並嚴格遵守。Session 結束後自動消失。
 
    ### 使用方式
-   - `/session-rules <規則>` — 新增一條規則
-   - `/session-rules list` — 查看所有規則
-   - `/session-rules remove <編號>` — 移除特定規則
-   - `/session-rules clear` — 清除所有規則
+   - `/ct:session-rules <規則>` — 新增一條規則
+   - `/ct:session-rules list` — 查看所有規則
+   - `/ct:session-rules remove <編號>` — 移除特定規則
+   - `/ct:session-rules clear` — 清除所有規則
 
    ### 自動讀取
    **每次回覆前**，先讀取 `/tmp/claude-session-rules-${CLAUDE_SESSION_ID}.md`。如果檔案存在，必須遵守其中所有規則。
@@ -110,9 +111,9 @@ Set up claude-together for global use across all Claude Code projects.
    Session memory 是當前 session 內的筆記，用於保存重要上下文以防 context 壓縮遺失。Session 結束後自動消失。與 session rules 不同，**不需要每次都讀取**，有需要時才查閱。
 
    ### 使用方式
-   - `/session-memory <內容>` — 儲存一條筆記
-   - `/session-memory read` — 查看所有筆記
-   - `/session-memory clear` — 清除所有筆記
+   - `/ct:session-memory <內容>` — 儲存一條筆記
+   - `/ct:session-memory read` — 查看所有筆記
+   - `/ct:session-memory clear` — 清除所有筆記
 
    ### 何時使用
    - 當重要的上下文資訊（架構決策、debug 發現、工作狀態）可能因 context 壓縮而遺失時

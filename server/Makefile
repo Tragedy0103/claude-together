@@ -9,7 +9,7 @@ REMOTE   := $(REGION)-docker.pkg.dev/$(PROJECT)/$(REPO)/$(IMAGE)
 .PHONY: build push deploy all
 
 build:
-	docker buildx build --platform linux/amd64 -t $(REMOTE):$(TAG) --push server/
+	docker buildx build --platform linux/amd64 -t $(REMOTE):$(TAG) --push .
 
 push: build
 

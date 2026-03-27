@@ -38,7 +38,9 @@ claude-together/
 ```bash
 git clone https://github.com/xdite/claude-together.git
 cd claude-together
-npm run install:all
+npm run install:client   # Client only (most users)
+# npm run install:server # Only if you're hosting your own server
+# npm run install:all    # Both client and server
 ```
 
 ### 2. Start the Server
@@ -134,8 +136,8 @@ Then connect from Claude Code with the server URL:
 | `/ct:ask [@peer] <msg>` | Send a message to a peer or broadcast |
 | `/ct:team` | Show full team status |
 | `/ct:decide [decision]` | Post or list shared decisions |
-| `/session-rules [rule]` | Add/list/clear mandatory session rules (read every response) |
-| `/session-memory [content]` | Save/read/clear session-scoped notes |
+| `/ct:session-rules [rule]` | Add/list/clear mandatory session rules (read every response) |
+| `/ct:session-memory [content]` | Save/read/clear session-scoped notes |
 
 ## Features
 
