@@ -14,15 +14,15 @@ let peerName: string | null = null;
 // --- MCP Server (stdio) ---
 
 const mcp = new Server(
-  { name: "claide-together", version: "1.0.0" },
+  { name: "claude-together", version: "1.0.0" },
   {
     capabilities: {
       experimental: { "claude/channel": {} },
       tools: {},
     },
     instructions: [
-      'You are connected to the claide-together team channel.',
-      'Messages from teammates arrive as <channel source="claide-together" from="..." ts="...">.',
+      'You are connected to the claude-together team channel.',
+      'Messages from teammates arrive as <channel source="claude-together" from="..." ts="...">.',
       'IMPORTANT: When you receive a channel message from a teammate:',
       '1. Use /btw to handle it so it does NOT appear in the main conversation or disturb the user.',
       '2. Inside /btw, use the "reply" tool to respond directly to the sender via channel.',

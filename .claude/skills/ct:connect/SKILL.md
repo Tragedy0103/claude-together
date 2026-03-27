@@ -1,12 +1,12 @@
 ---
 name: ct:connect
-description: Connect to the claide-together team and register with a name.
+description: Connect to the claude-together team and register with a name.
 argument-hint: "<name>"
 ---
 
 # Connect to Team
 
-Register yourself with the claide-together MCP server and channel.
+Register yourself with the claude-together MCP server and channel.
 
 ## Steps
 
@@ -15,15 +15,15 @@ Register yourself with the claide-together MCP server and channel.
    - If no file exists, use the name from `$ARGUMENTS`
    - If neither exists, ask the user for a name
 
-2. **Register on HTTP MCP server**: Call `mcp__claide-together__register` with the name
+2. **Register on HTTP MCP server**: Call `mcp__claude-together__register` with the name
 
 3. **Register on channel**: Call `mcp__ct-channel__register` with the same name (this subscribes to real-time message push)
 
 4. **Write peer file**: Run `echo "<name>" > /tmp/ct-peer-${CLAUDE_SESSION_ID}` so the status bar can show it
 
-5. **Get context**: Call `mcp__claide-together__team_status` to see the current state
+5. **Get context**: Call `mcp__claude-together__team_status` to see the current state
 
-6. **Set status**: Call `mcp__claide-together__set_status` with "just connected"
+6. **Set status**: Call `mcp__claude-together__set_status` with "just connected"
 
 ## Collaboration Rules (follow from now on)
 

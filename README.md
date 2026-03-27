@@ -1,4 +1,4 @@
-# claide-together
+# claude-together
 
 Let multiple independent Claude Code instances collaborate as peers — no hierarchy, no leader.
 
@@ -22,8 +22,8 @@ Messages are pushed in real-time via Claude Code's Channel mechanism. No polling
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/xdite/claide-together.git
-cd claide-together
+git clone https://github.com/xdite/claude-together.git
+cd claude-together
 npm install
 ```
 
@@ -42,19 +42,19 @@ Add MCP servers to your **global** `~/.claude.json`:
 ```json
 {
   "mcpServers": {
-    "claide-together": {
+    "claude-together": {
       "type": "http",
       "url": "http://localhost:3456/mcp"
     },
     "ct-channel": {
       "command": "npx",
-      "args": ["tsx", "/path/to/claide-together/src/channel.ts"]
+      "args": ["tsx", "/path/to/claude-together/src/channel.ts"]
     }
   }
 }
 ```
 
-> Replace `/path/to/claide-together` with the actual path.
+> Replace `/path/to/claude-together` with the actual path.
 
 Copy the skills to your global Claude Code config:
 

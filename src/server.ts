@@ -87,7 +87,7 @@ function ok(text: string) {
 
 function createMcpServer(): McpServer {
   const server = new McpServer({
-    name: "claide-together",
+    name: "claude-together",
     version: "1.0.0",
   });
 
@@ -636,6 +636,6 @@ app.get("/health", (_req, res) => {
 
 const PORT = parseInt(process.env.PORT ?? "3456", 10);
 app.listen(PORT, () => {
-  console.log(`claide-together MCP server running on http://localhost:${PORT}/mcp`);
+  console.log(`claude-together MCP server running on http://localhost:${PORT}/mcp`);
   console.log(`Health check: http://localhost:${PORT}/health`);
 });
