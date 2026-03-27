@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import http from "http";
 
-let dispatcherUrl = process.env.CT_DISPATCHER_URL ?? "http://localhost:3456";
+let dispatcherUrl = process.env.CT_DISPATCHER_URL ?? "";
 let apiKey = process.env.CT_API_KEY ?? "";
 
 let peerName: string | null = null;
@@ -43,10 +43,10 @@ const tools = [
       type: "object" as const,
       properties: {
         name: { type: "string", description: "Your display name, e.g. 'auth-agent' or 'api-agent'" },
-        url: { type: "string", description: "Server URL to connect to, e.g. 'https://ct-server.example.com'. Defaults to CT_DISPATCHER_URL env var or http://localhost:3456" },
+        url: { type: "string", description: "Server URL to connect to, e.g. 'http://localhost:3456' or 'https://ct-server.example.com'" },
         api_key: { type: "string", description: "API key for remote server authentication (x-api-key header). Not needed for local servers." },
       },
-      required: ["name"],
+      required: ["name", "url"],
     },
   },
   {
@@ -161,6 +161,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   if (toolName === "register") {
     if (args.url) {
       dispatcherUrl = args.url.replace(/\/+$/, ""); // strip trailing slash
+    }
+    if (!dispatcherUrl) {
+      return { content: [{ type: "text", text: "Error: server URL is required. Pass it as the `url` parameter." }] };
     }
     if (args.api_key) {
       apiKey = args.api_key;
