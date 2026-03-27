@@ -6,8 +6,7 @@
     },
     "ct-channel": {
       "command": "npx",
-      "args": ["tsx", "src/channel.ts"],
-      "cwd": "/Users/a01-0224-0592/claude-together"
+      "args": ["tsx", "client/channel.ts"]
     }
   }
 }

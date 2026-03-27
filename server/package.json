@@ -1,0 +1,22 @@
+{
+  "name": "claude-together-server",
+  "version": "1.0.0",
+  "description": "claude-together dispatcher server — shared state hub for peer-to-peer collaboration",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "npx tsx server.ts",
+    "build": "npx tsc",
+    "start": "node dist/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "express": "^5.2.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}

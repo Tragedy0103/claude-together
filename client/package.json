@@ -1,0 +1,20 @@
+{
+  "name": "claude-together-client",
+  "version": "1.0.0",
+  "description": "claude-together channel client — stdio MCP bridge for Claude Code",
+  "main": "dist/channel.js",
+  "scripts": {
+    "dev": "npx tsx channel.ts",
+    "build": "npx tsc",
+    "start": "node dist/channel.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}

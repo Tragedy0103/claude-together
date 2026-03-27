@@ -7,15 +7,29 @@ Solves the limitation of Claude Code's native Agent Teams (lead → teammate onl
 ## How It Works
 
 ```
-Claude Code A ← stdio → Channel ←┐
-                                  ├── SSE/HTTP → Dispatcher (shared state)
-Claude Code B ← stdio → Channel ←┘
+Claude Code A ← stdio → Client (channel) ←┐
+                                           ├── SSE/HTTP → Server (dispatcher)
+Claude Code B ← stdio → Client (channel) ←┘
 ```
 
-- **Dispatcher** (`src/server.ts`) — Express HTTP server with MCP tools + SSE push
-- **Channel** (`src/channel.ts`) — stdio MCP server bridging Claude Code ↔ Dispatcher
+## Project Structure
 
-Messages are pushed in real-time via Claude Code's Channel mechanism. No polling needed.
+```
+claude-together/
+├── server/          # Dispatcher — shared state hub (Express HTTP + MCP + SSE)
+│   ├── server.ts
+│   ├── package.json
+│   └── tsconfig.json
+├── client/          # Channel — stdio MCP bridge for Claude Code
+│   ├── channel.ts
+│   ├── package.json
+│   └── tsconfig.json
+├── .claude/         # Skills & hooks for Claude Code integration
+└── README.md
+```
+
+- **Server** (`server/`) — Express HTTP server. Manages peers, messages, tasks, file locks, and decisions. One instance serves all peers.
+- **Client** (`client/`) — stdio MCP server. Bridges Claude Code ↔ Server via SSE. One instance per Claude Code session.
 
 ## Quick Start
 
@@ -24,16 +38,17 @@ Messages are pushed in real-time via Claude Code's Channel mechanism. No polling
 ```bash
 git clone https://github.com/xdite/claude-together.git
 cd claude-together
-npm install
+npm run install:all
 ```
 
-### 2. Start the Dispatcher
+### 2. Start the Server
 
 ```bash
+cd server
 npm run dev
 ```
 
-This starts the shared state server on `http://localhost:3456`.
+This starts the dispatcher on `http://localhost:3456`.
 
 ### 3. Configure Claude Code
 
@@ -48,7 +63,7 @@ Add MCP servers to your **global** `~/.claude.json`:
     },
     "ct-channel": {
       "command": "npx",
-      "args": ["tsx", "/path/to/claude-together/src/channel.ts"]
+      "args": ["tsx", "/path/to/claude-together/client/channel.ts"]
     }
   }
 }
@@ -56,7 +71,7 @@ Add MCP servers to your **global** `~/.claude.json`:
 
 > Replace `/path/to/claude-together` with the actual path.
 
-Copy the skills to your global Claude Code config:
+Copy the skills and hooks to your global Claude Code config:
 
 ```bash
 cp -r .claude/skills/ct:* ~/.claude/skills/
@@ -82,7 +97,7 @@ Add the cleanup hook to `~/.claude/settings.json`:
 }
 ```
 
-### 4. Launch Claude Code with Channel Support
+### 4. Launch Claude Code
 
 ```bash
 claude --dangerously-load-development-channels server:ct-channel
@@ -97,6 +112,23 @@ In each Claude Code session:
 ```
 
 That's it. Messages will be pushed in real-time between all connected sessions.
+
+## Docker Deployment (Server Only)
+
+The server can run in a Docker container. The client always runs locally alongside Claude Code.
+
+```bash
+cd server
+docker build -t claude-together-server .
+docker run -p 3456:3456 claude-together-server
+```
+
+Then point the client to the server:
+
+```bash
+# Set the env var in your Claude Code MCP config
+CT_DISPATCHER_URL=http://<server-host>:3456
+```
 
 ## Slash Commands
 
@@ -125,10 +157,6 @@ Create, claim, and update tasks. All peers see the same task board.
 ### File Locking
 Prevent conflicts when multiple agents work on the same codebase.
 
-```
-# Claude Code will automatically lock/unlock files before editing
-```
-
 ### Shared Decisions
 Record architecture and design decisions that all peers should know about.
 
@@ -153,27 +181,27 @@ Works across different projects. Any Claude Code session with the global MCP con
 | Decisions | `post_decision`, `list_decisions` |
 | Overview | `team_status` |
 
-## Architecture
-
-The system has two components:
-
-**Dispatcher** (one instance, always running):
-- HTTP MCP server for tools (register, tasks, locks, decisions)
-- SSE endpoint for real-time message push
-- In-memory state (peers, messages, tasks, locks, decisions)
-
-**Channel** (one per Claude Code session, auto-spawned):
-- stdio MCP server with `claude/channel` capability
-- Subscribes to Dispatcher's SSE for incoming messages
-- Pushes messages as `<channel>` notifications into Claude Code
-
 ## Development
 
 ```bash
+# Server
+cd server
 npm run dev       # Start dispatcher in dev mode
 npm run build     # Compile TypeScript
 npm run start     # Run compiled version
+
+# Client
+cd client
+npm run dev       # Start channel in dev mode
+npm run build     # Compile TypeScript
 ```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3456` | Server listen port |
+| `CT_DISPATCHER_URL` | `http://localhost:3456` | Server URL (used by client) |
 
 ## Limitations
 
