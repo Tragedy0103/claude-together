@@ -1,6 +1,6 @@
 ---
 name: ct:team
-description: Show full team status - peers, tasks, locks, decisions.
+description: Show full team status - peers, events, and decisions.
 ---
 
 # Team Status

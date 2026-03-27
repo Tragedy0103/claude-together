@@ -28,7 +28,7 @@ claude-together/
 └── README.md
 ```
 
-- **Server** (`server/`) — Express HTTP server. Manages peers, messages, tasks, file locks, and decisions. One instance serves all peers.
+- **Server** (`server/`) — Express HTTP server. Manages peers, messages, lifecycle events, and decisions. One instance serves all peers.
 - **Client** (`client/`) — stdio MCP server. Bridges Claude Code ↔ Server via SSE. One instance per Claude Code session.
 
 ## Quick Start
@@ -132,7 +132,6 @@ Then connect from Claude Code with the server URL:
 | `/ct:connect <name> [url]` | Join the team, optionally specify server URL |
 | `/ct:ask [@peer] <msg>` | Send a message to a peer or broadcast |
 | `/ct:team` | Show full team status |
-| `/ct:task <action>` | Manage shared tasks (create/list/claim/done) |
 | `/ct:decide [decision]` | Post or list shared decisions |
 
 ## Features
@@ -140,17 +139,8 @@ Then connect from Claude Code with the server URL:
 ### Real-time Messaging
 Messages are pushed instantly via Claude Code Channels. No polling, no manual `receive_messages`.
 
-### Shared Task List
-Create, claim, and update tasks. All peers see the same task board.
-
-```
-/ct:task create Implement auth API
-/ct:task claim task-1
-/ct:task done task-1
-```
-
-### File Locking
-Prevent conflicts when multiple agents work on the same codebase.
+### Lifecycle Events
+Join and leave events are recorded server-side and queryable via the `event` tool. No broadcast messages are sent — peers can poll when they need to.
 
 ### Shared Decisions
 Record architecture and design decisions that all peers should know about.
@@ -171,8 +161,7 @@ Works across different projects. Any Claude Code session with the global MCP con
 |----------|-------|
 | Identity | `register`, `set_status`, `list_peers` |
 | Messaging | `send_message`, `broadcast` |
-| Tasks | `create_task`, `list_tasks`, `claim_task`, `update_task` |
-| File Locks | `lock_file`, `unlock_file`, `check_file`, `list_locks` |
+| Events | `event` (query join/leave lifecycle events) |
 | Decisions | `post_decision`, `list_decisions` |
 | Overview | `team_status` |
 
