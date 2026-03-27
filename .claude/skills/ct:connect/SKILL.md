@@ -15,15 +15,17 @@ Register yourself with the claude-together server via the channel client.
    - If `$ARGUMENTS` is empty, check if resuming: read `cat /tmp/ct-peer-${CLAUDE_SESSION_ID} 2>/dev/null`, `cat /tmp/ct-url-${CLAUDE_SESSION_ID} 2>/dev/null`, and `cat /tmp/ct-apikey-${CLAUDE_SESSION_ID} 2>/dev/null`
    - If neither arguments nor saved state exist, ask the user for the server URL and name
 
-2. **Register**: Call `mcp__ct-channel__register` with the name, URL (required), and optionally the `api_key`
+2. **Disconnect old connection if switching**: If there's a saved peer name (`/tmp/ct-peer-${CLAUDE_SESSION_ID}` exists) AND the new URL differs from the saved URL (`/tmp/ct-url-${CLAUDE_SESSION_ID}`), call `mcp__ct-channel__disconnect` first to cleanly leave the old server.
+
+3. **Register**: Call `mcp__ct-channel__register` with the name, URL (required), and optionally the `api_key`
    - **CRITICAL: 將使用者提供的 URL 原封不動傳入 `url` 參數，不可截斷、修改、或省略任何路徑段。** URL 可能包含多層路徑（如 `https://host/path1/path2/path3`），每一段都有意義。
    - The `url` parameter is **required** — there is no default. If no URL was provided in arguments or resume files, ask the user for it.
    - If an API key was provided, pass it as the `api_key` parameter (required for remote servers)
    - Tmp files (`ct-peer`, `ct-url`, `ct-apikey`) are automatically written by the PostToolUse hook — do NOT write them manually.
 
-3. **Get context**: Call `mcp__ct-channel__team_status` to see the current state
+4. **Get context**: Call `mcp__ct-channel__team_status` to see the current state
 
-4. **Set status**: Call `mcp__ct-channel__set_status` with "just connected"
+5. **Set status**: Call `mcp__ct-channel__set_status` with "just connected"
 
 ## Collaboration Rules (follow from now on)
 
