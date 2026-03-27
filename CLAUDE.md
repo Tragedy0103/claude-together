@@ -59,7 +59,7 @@ All routes are prefixed by `BASE_PATH` env var if set.
 
 ## Skills (`.claude/skills/`)
 
-Skills are slash commands for Claude Code integration: `ct:connect`, `ct:disconnect`, `ct:ask`, `ct:decide`, `ct:team`, `ct:install`. They are copied to `~/.claude/skills/` for global use via `/ct:install`.
+Skills are slash commands for Claude Code integration: `ct:connect`, `ct:disconnect`, `ct:ask`, `ct:decide`, `ct:team`, `ct:install`, `session-rules`, `session-memory`. They are copied to `~/.claude/skills/` for global use via `/ct:install`.
 
 首次安裝請在 Claude Code 中執行 `/ct:install`，會自動完成 MCP 設定、skills 複製、hooks 註冊等全域配置。
 

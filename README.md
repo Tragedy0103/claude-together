@@ -134,6 +134,8 @@ Then connect from Claude Code with the server URL:
 | `/ct:ask [@peer] <msg>` | Send a message to a peer or broadcast |
 | `/ct:team` | Show full team status |
 | `/ct:decide [decision]` | Post or list shared decisions |
+| `/session-rules [rule]` | Add/list/clear mandatory session rules (read every response) |
+| `/session-memory [content]` | Save/read/clear session-scoped notes |
 
 ## Features
 
