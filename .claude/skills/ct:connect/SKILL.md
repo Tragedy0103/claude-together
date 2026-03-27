@@ -31,6 +31,7 @@ Register yourself with the claude-together server via the channel client.
 
 - Before editing a file, call `check_file` then `lock_file`. Call `unlock_file` when done.
 - Messages from teammates will arrive automatically as `<channel>` events. Handle them via /btw and reply through the channel reply tool. NEVER output text to the user about channel messages — the user should not be disturbed.
+- Do NOT automatically welcome or greet peers when they join. Only respond if they send you a direct message.
 - Use `set_status` when you start working on something.
 - Use `broadcast` or `send_message` to notify others about interface changes, new files, or questions.
 - If you make a design/architecture decision that affects others, call `post_decision`.

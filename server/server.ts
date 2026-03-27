@@ -24,23 +24,6 @@ interface Message {
   readBy: Set<string>; // peer names that have read this
 }
 
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: "open" | "in_progress" | "done" | "blocked";
-  assignee: string | null;
-  createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface FileLock {
-  path: string;
-  owner: string;
-  lockedAt: Date;
-  reason: string;
-}
 
 interface Decision {
   id: string;
@@ -50,11 +33,18 @@ interface Decision {
   createdAt: Date;
 }
 
+interface Event {
+  id: string;
+  type: string; // e.g. "joined", "left"
+  peer: string;
+  message: string;
+  timestamp: Date;
+}
+
 const peers = new Map<string, Peer>(); // sessionId -> Peer
 const messages: Message[] = [];
-const tasks = new Map<string, Task>(); // taskId -> Task
-const fileLocks = new Map<string, FileLock>(); // filePath -> FileLock
 const decisions: Decision[] = [];
+const events: Event[] = [];
 
 function getPeerBySession(sessionId: string): Peer | undefined {
   return peers.get(sessionId);
@@ -112,15 +102,27 @@ function createMcpServer(): McpServer {
         status: "idle",
         registeredAt: new Date(),
       });
+      // Record and broadcast join event
+      events.push({
+        id: randomUUID(),
+        type: "joined",
+        peer: args.name,
+        message: `${args.name} joined the team.`,
+        timestamp: new Date(),
+      });
+      messages.push({
+        id: randomUUID(),
+        from: "system",
+        to: "*",
+        content: `${args.name} joined the team.`,
+        timestamp: new Date(),
+        readBy: new Set([args.name]),
+      });
       // Return current team state so the new peer has context
       const peerList = Array.from(peers.values()).map((p) => `${p.name} (${p.status})`);
-      const openTasks = Array.from(tasks.values()).filter((t) => t.status !== "done");
       const summary = [
         `Registered as "${args.name}".`,
         `\nOnline peers: ${peerList.join(", ")}`,
-        openTasks.length > 0
-          ? `\nOpen tasks:\n${openTasks.map((t) => `  [${t.id}] ${t.title} (${t.status}, assignee: ${t.assignee ?? "none"})`).join("\n")}`
-          : "\nNo open tasks.",
         decisions.length > 0
           ? `\nRecent decisions:\n${decisions.slice(-5).map((d) => `  - ${d.title}: ${d.content}`).join("\n")}`
           : "",
@@ -199,177 +201,25 @@ function createMcpServer(): McpServer {
     }
   );
 
-  // ----------------------------------------------------------
-  // Shared Task List
-  // ----------------------------------------------------------
-
   server.tool(
-    "create_task",
-    "Create a new task for the team. Anyone can pick it up.",
+    "event",
+    "List lifecycle events (e.g. joined, left). Optionally filter by type.",
     {
-      title: z.string().describe("Short task title"),
-      description: z.string().describe("Detailed description of what needs to be done"),
-      assignee: z.string().optional().describe("Peer name to assign to (optional)"),
+      type: z.string().optional().describe("Filter by event type, e.g. 'joined' or 'left'. Omit for all."),
+      limit: z.number().optional().describe("Max number of events to return (default: 20)"),
     },
     async (args, extra) => {
       const r = requirePeer(extra.sessionId ?? "");
       if ("error" in r) return err(r.error);
-      const id = `task-${tasks.size + 1}`;
-      const now = new Date();
-      tasks.set(id, {
-        id,
-        title: args.title,
-        description: args.description,
-        status: args.assignee ? "in_progress" : "open",
-        assignee: args.assignee ?? null,
-        createdBy: r.peer.name,
-        createdAt: now,
-        updatedAt: now,
-      });
-      // Auto-broadcast so everyone knows
-      messages.push({
-        id: randomUUID(),
-        from: "system",
-        to: "*",
-        content: `New task [${id}]: "${args.title}"${args.assignee ? ` (assigned to ${args.assignee})` : ""}`,
-        timestamp: now,
-        readBy: new Set([r.peer.name]),
-      });
-      return ok(`Task created: [${id}] ${args.title}`);
-    }
-  );
-
-  server.tool(
-    "list_tasks",
-    "List all tasks and their status.",
-    {
-      status: z.enum(["all", "open", "in_progress", "done", "blocked"]).optional().describe("Filter by status (default: all)"),
-    },
-    async (args) => {
-      const filter = args.status ?? "all";
-      let list = Array.from(tasks.values());
-      if (filter !== "all") list = list.filter((t) => t.status === filter);
-      if (list.length === 0) return ok(`No tasks${filter !== "all" ? ` with status "${filter}"` : ""}.`);
+      let list = [...events];
+      if (args.type) list = list.filter((e) => e.type === args.type);
+      const max = args.limit ?? 20;
+      list = list.slice(-max);
+      if (list.length === 0) return ok("No events.");
       const lines = list.map(
-        (t) => `  [${t.id}] ${t.title} | ${t.status} | assignee: ${t.assignee ?? "none"} | by: ${t.createdBy}`
+        (e) => `  [${e.timestamp.toISOString()}] ${e.type}: ${e.message}`
       );
-      return ok(`Tasks:\n${lines.join("\n")}`);
-    }
-  );
-
-  server.tool(
-    "claim_task",
-    "Assign a task to yourself and set it to in_progress.",
-    { task_id: z.string().describe("Task ID, e.g. task-1") },
-    async (args, extra) => {
-      const r = requirePeer(extra.sessionId ?? "");
-      if ("error" in r) return err(r.error);
-      const task = tasks.get(args.task_id);
-      if (!task) return err(`Task "${args.task_id}" not found.`);
-      if (task.assignee && task.assignee !== r.peer.name) {
-        return err(`Task already assigned to "${task.assignee}".`);
-      }
-      task.assignee = r.peer.name;
-      task.status = "in_progress";
-      task.updatedAt = new Date();
-      return ok(`Task [${task.id}] assigned to you.`);
-    }
-  );
-
-  server.tool(
-    "update_task",
-    "Update a task's status or description.",
-    {
-      task_id: z.string().describe("Task ID"),
-      status: z.enum(["open", "in_progress", "done", "blocked"]).optional(),
-      description: z.string().optional().describe("Updated description"),
-    },
-    async (args, extra) => {
-      const r = requirePeer(extra.sessionId ?? "");
-      if ("error" in r) return err(r.error);
-      const task = tasks.get(args.task_id);
-      if (!task) return err(`Task "${args.task_id}" not found.`);
-      if (args.status) task.status = args.status;
-      if (args.description) task.description = args.description;
-      task.updatedAt = new Date();
-      // Notify on status change
-      if (args.status) {
-        messages.push({
-          id: randomUUID(),
-          from: "system",
-          to: "*",
-          content: `Task [${task.id}] "${task.title}" → ${args.status} (by ${r.peer.name})`,
-          timestamp: new Date(),
-          readBy: new Set([r.peer.name]),
-        });
-      }
-      return ok(`Task [${task.id}] updated.`);
-    }
-  );
-
-  // ----------------------------------------------------------
-  // File Locking (conflict prevention)
-  // ----------------------------------------------------------
-
-  server.tool(
-    "lock_file",
-    "Lock a file so other peers know you are editing it. Prevents conflicts.",
-    {
-      path: z.string().describe("File path relative to project root, e.g. src/auth.ts"),
-      reason: z.string().optional().describe("Why you need this file"),
-    },
-    async (args, extra) => {
-      const r = requirePeer(extra.sessionId ?? "");
-      if ("error" in r) return err(r.error);
-      const existing = fileLocks.get(args.path);
-      if (existing && existing.owner !== r.peer.name) {
-        return err(`File "${args.path}" is locked by "${existing.owner}" (reason: ${existing.reason}).`);
-      }
-      fileLocks.set(args.path, {
-        path: args.path,
-        owner: r.peer.name,
-        lockedAt: new Date(),
-        reason: args.reason ?? "editing",
-      });
-      return ok(`File "${args.path}" locked by you.`);
-    }
-  );
-
-  server.tool(
-    "unlock_file",
-    "Release your lock on a file.",
-    { path: z.string().describe("File path to unlock") },
-    async (args, extra) => {
-      const r = requirePeer(extra.sessionId ?? "");
-      if ("error" in r) return err(r.error);
-      const lock = fileLocks.get(args.path);
-      if (!lock) return ok(`File "${args.path}" is not locked.`);
-      if (lock.owner !== r.peer.name) return err(`File is locked by "${lock.owner}", not you.`);
-      fileLocks.delete(args.path);
-      return ok(`File "${args.path}" unlocked.`);
-    }
-  );
-
-  server.tool(
-    "check_file",
-    "Check if a file is locked by someone before editing.",
-    { path: z.string().describe("File path to check") },
-    async (args) => {
-      const lock = fileLocks.get(args.path);
-      if (!lock) return ok(`File "${args.path}" is free.`);
-      return ok(`File "${args.path}" is locked by "${lock.owner}" since ${lock.lockedAt.toISOString()} (reason: ${lock.reason}).`);
-    }
-  );
-
-  server.tool(
-    "list_locks",
-    "List all currently locked files.",
-    {},
-    async () => {
-      const locks = Array.from(fileLocks.values());
-      if (locks.length === 0) return ok("No files are locked.");
-      const lines = locks.map((l) => `  ${l.path} → ${l.owner} (${l.reason})`);
-      return ok(`Locked files:\n${lines.join("\n")}`);
+      return ok(`Events:\n${lines.join("\n")}`);
     }
   );
 
@@ -427,7 +277,7 @@ function createMcpServer(): McpServer {
 
   server.tool(
     "team_status",
-    "Get a full overview: who is online, what they are doing, open tasks, locked files, and recent decisions.",
+    "Get a full overview: who is online, what they are doing, and recent decisions.",
     {},
     async (_args, extra) => {
       const r = requirePeer(extra.sessionId ?? "");
@@ -442,26 +292,6 @@ function createMcpServer(): McpServer {
         sections.push("  (none)");
       } else {
         for (const p of peerList) sections.push(`  ${p.name}: ${p.status}`);
-      }
-
-      // Tasks
-      const openTasks = Array.from(tasks.values()).filter((t) => t.status !== "done");
-      sections.push("\n## Open Tasks");
-      if (openTasks.length === 0) {
-        sections.push("  (none)");
-      } else {
-        for (const t of openTasks) {
-          sections.push(`  [${t.id}] ${t.title} | ${t.status} | assignee: ${t.assignee ?? "none"}`);
-        }
-      }
-
-      // Locks
-      const locks = Array.from(fileLocks.values());
-      sections.push("\n## Locked Files");
-      if (locks.length === 0) {
-        sections.push("  (none)");
-      } else {
-        for (const l of locks) sections.push(`  ${l.path} → ${l.owner}`);
       }
 
       // Recent decisions
@@ -485,11 +315,13 @@ function createMcpServer(): McpServer {
 // ============================================================
 
 const app = express();
+const BASE_PATH = (process.env.BASE_PATH ?? "").replace(/\/+$/, ""); // e.g. "/api/v1"
+const router = express.Router();
 app.use(express.json());
 
 const transports = new Map<string, StreamableHTTPServerTransport>();
 
-app.post("/mcp", async (req, res) => {
+router.post("/mcp", async (req, res) => {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
   if (sessionId && transports.has(sessionId)) {
@@ -511,10 +343,22 @@ app.post("/mcp", async (req, res) => {
       const peer = peers.get(sid);
       if (peer) {
         console.log(`[-] Peer disconnected: ${peer.name}`);
-        // Release all locks held by this peer
-        for (const [path, lock] of fileLocks.entries()) {
-          if (lock.owner === peer.name) fileLocks.delete(path);
-        }
+        // Record leave event and broadcast
+        events.push({
+          id: randomUUID(),
+          type: "left",
+          peer: peer.name,
+          message: `${peer.name} left the team.`,
+          timestamp: new Date(),
+        });
+        messages.push({
+          id: randomUUID(),
+          from: "system",
+          to: "*",
+          content: `${peer.name} left the team.`,
+          timestamp: new Date(),
+          readBy: new Set(),
+        });
         peers.delete(sid);
       }
       transports.delete(sid);
@@ -526,7 +370,7 @@ app.post("/mcp", async (req, res) => {
   await transport.handleRequest(req, res, req.body);
 });
 
-app.get("/mcp", async (req, res) => {
+router.get("/mcp", async (req, res) => {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
   if (sessionId && transports.has(sessionId)) {
     await transports.get(sessionId)!.handleRequest(req, res);
@@ -535,7 +379,7 @@ app.get("/mcp", async (req, res) => {
   res.status(400).json({ error: "Missing or invalid session ID" });
 });
 
-app.delete("/mcp", async (req, res) => {
+router.delete("/mcp", async (req, res) => {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
   if (sessionId && transports.has(sessionId)) {
     await transports.get(sessionId)!.handleRequest(req, res, req.body);
@@ -551,7 +395,7 @@ interface ChannelSubscriber {
 }
 const channelSubscribers = new Map<string, ChannelSubscriber>(); // peerName -> subscriber
 
-app.get("/channel/subscribe/:peerName", (req, res) => {
+router.get("/channel/subscribe/:peerName", (req, res) => {
   const peerName = req.params.peerName;
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -589,7 +433,7 @@ function broadcastToChannels(from: string, content: string) {
 }
 
 // POST endpoint for sending messages via channel (used by the channel stdio process)
-app.post("/channel/send", (req, res) => {
+router.post("/channel/send", (req, res) => {
   const { from, to, content } = req.body as { from: string; to: string; content: string };
   if (!from || !content) {
     res.status(400).json({ error: "Missing from or content" });
@@ -625,7 +469,7 @@ messages.push = (...items: Message[]) => {
 };
 
 // REST proxy endpoint — allows channel clients to call MCP tools via HTTP
-app.post("/api/call", async (req, res) => {
+router.post("/api/call", async (req, res) => {
   const { peer, tool, args } = req.body as { peer: string; tool: string; args: Record<string, unknown> };
   if (!peer || !tool) {
     res.status(400).json({ error: "Missing peer or tool" });
@@ -682,14 +526,26 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
         status: "idle",
         registeredAt: new Date(),
       });
+      // Record and broadcast join event
+      events.push({
+        id: randomUUID(),
+        type: "joined",
+        peer: name,
+        message: `${name} joined the team.`,
+        timestamp: new Date(),
+      });
+      messages.push({
+        id: randomUUID(),
+        from: "system",
+        to: "*",
+        content: `${name} joined the team.`,
+        timestamp: new Date(),
+        readBy: new Set([name]),
+      });
       const peerList = Array.from(peers.values()).map((p) => `${p.name} (${p.status})`);
-      const openTasks = Array.from(tasks.values()).filter((t) => t.status !== "done");
       const summary = [
         `Registered as "${name}".`,
         `\nOnline peers: ${peerList.join(", ")}`,
-        openTasks.length > 0
-          ? `\nOpen tasks:\n${openTasks.map((t) => `  [${t.id}] ${t.title} (${t.status}, assignee: ${t.assignee ?? "none"})`).join("\n")}`
-          : "\nNo open tasks.",
       ];
       return ok(summary.join(""));
     }
@@ -732,108 +588,18 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
       });
       return ok("Message broadcast to all peers.");
     }
-    case "create_task": {
+    case "event": {
       const p = r();
       if ("error" in p) return err(p.error);
-      const id = `task-${tasks.size + 1}`;
-      const now = new Date();
-      tasks.set(id, {
-        id,
-        title: args.title as string,
-        description: args.description as string,
-        status: (args.assignee as string) ? "in_progress" : "open",
-        assignee: (args.assignee as string) ?? null,
-        createdBy: p.peer.name,
-        createdAt: now,
-        updatedAt: now,
-      });
-      messages.push({
-        id: randomUUID(),
-        from: "system",
-        to: "*",
-        content: `New task [${id}]: "${args.title}"${args.assignee ? ` (assigned to ${args.assignee})` : ""}`,
-        timestamp: now,
-        readBy: new Set([p.peer.name]),
-      });
-      return ok(`Task created: [${id}] ${args.title}`);
-    }
-    case "list_tasks": {
-      const filter = (args.status as string) ?? "all";
-      let list = Array.from(tasks.values());
-      if (filter !== "all") list = list.filter((t) => t.status === filter);
-      if (list.length === 0) return ok(`No tasks${filter !== "all" ? ` with status "${filter}"` : ""}.`);
+      let list = [...events];
+      if (args.type) list = list.filter((e) => e.type === (args.type as string));
+      const max = (args.limit as number) ?? 20;
+      list = list.slice(-max);
+      if (list.length === 0) return ok("No events.");
       const lines = list.map(
-        (t) => `  [${t.id}] ${t.title} | ${t.status} | assignee: ${t.assignee ?? "none"} | by: ${t.createdBy}`
+        (e) => `  [${e.timestamp.toISOString()}] ${e.type}: ${e.message}`
       );
-      return ok(`Tasks:\n${lines.join("\n")}`);
-    }
-    case "claim_task": {
-      const p = r();
-      if ("error" in p) return err(p.error);
-      const task = tasks.get(args.task_id as string);
-      if (!task) return err(`Task "${args.task_id}" not found.`);
-      if (task.assignee && task.assignee !== p.peer.name) {
-        return err(`Task already assigned to "${task.assignee}".`);
-      }
-      task.assignee = p.peer.name;
-      task.status = "in_progress";
-      task.updatedAt = new Date();
-      return ok(`Task [${task.id}] assigned to you.`);
-    }
-    case "update_task": {
-      const p = r();
-      if ("error" in p) return err(p.error);
-      const task = tasks.get(args.task_id as string);
-      if (!task) return err(`Task "${args.task_id}" not found.`);
-      if (args.status) task.status = args.status as Task["status"];
-      if (args.description) task.description = args.description as string;
-      task.updatedAt = new Date();
-      if (args.status) {
-        messages.push({
-          id: randomUUID(),
-          from: "system",
-          to: "*",
-          content: `Task [${task.id}] "${task.title}" → ${args.status} (by ${p.peer.name})`,
-          timestamp: new Date(),
-          readBy: new Set([p.peer.name]),
-        });
-      }
-      return ok(`Task [${task.id}] updated.`);
-    }
-    case "lock_file": {
-      const p = r();
-      if ("error" in p) return err(p.error);
-      const existing = fileLocks.get(args.path as string);
-      if (existing && existing.owner !== p.peer.name) {
-        return err(`File "${args.path}" is locked by "${existing.owner}" (reason: ${existing.reason}).`);
-      }
-      fileLocks.set(args.path as string, {
-        path: args.path as string,
-        owner: p.peer.name,
-        lockedAt: new Date(),
-        reason: (args.reason as string) ?? "editing",
-      });
-      return ok(`File "${args.path}" locked by you.`);
-    }
-    case "unlock_file": {
-      const p = r();
-      if ("error" in p) return err(p.error);
-      const lock = fileLocks.get(args.path as string);
-      if (!lock) return ok(`File "${args.path}" is not locked.`);
-      if (lock.owner !== p.peer.name) return err(`File is locked by "${lock.owner}", not you.`);
-      fileLocks.delete(args.path as string);
-      return ok(`File "${args.path}" unlocked.`);
-    }
-    case "check_file": {
-      const lock = fileLocks.get(args.path as string);
-      if (!lock) return ok(`File "${args.path}" is free.`);
-      return ok(`File "${args.path}" is locked by "${lock.owner}" since ${lock.lockedAt.toISOString()} (reason: ${lock.reason}).`);
-    }
-    case "list_locks": {
-      const locks = Array.from(fileLocks.values());
-      if (locks.length === 0) return ok("No files are locked.");
-      const lines = locks.map((l) => `  ${l.path} → ${l.owner} (${l.reason})`);
-      return ok(`Locked files:\n${lines.join("\n")}`);
+      return ok(`Events:\n${lines.join("\n")}`);
     }
     case "post_decision": {
       const p = r();
@@ -872,22 +638,6 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
       } else {
         for (const p of peerList) sections.push(`  ${p.name}: ${p.status}`);
       }
-      const openTasks = Array.from(tasks.values()).filter((t) => t.status !== "done");
-      sections.push("\n## Open Tasks");
-      if (openTasks.length === 0) {
-        sections.push("  (none)");
-      } else {
-        for (const t of openTasks) {
-          sections.push(`  [${t.id}] ${t.title} | ${t.status} | assignee: ${t.assignee ?? "none"}`);
-        }
-      }
-      const locks = Array.from(fileLocks.values());
-      sections.push("\n## Locked Files");
-      if (locks.length === 0) {
-        sections.push("  (none)");
-      } else {
-        for (const l of locks) sections.push(`  ${l.path} → ${l.owner}`);
-      }
       sections.push("\n## Recent Decisions");
       const recent = decisions.slice(-5);
       if (recent.length === 0) {
@@ -902,20 +652,20 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
   }
 }
 
-app.get("/health", (_req, res) => {
+router.get("/health", (_req, res) => {
   res.json({
     status: "ok",
     peers: Array.from(peers.values()).map((p) => ({ name: p.name, status: p.status })),
-    taskCount: tasks.size,
-    lockCount: fileLocks.size,
     decisionCount: decisions.length,
   });
 });
 
+app.use(BASE_PATH, router);
+
 const PORT = parseInt(process.env.PORT ?? "3456", 10);
 const server = app.listen(PORT, () => {
-  console.log(`claude-together MCP server running on http://localhost:${PORT}/mcp`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`claude-together MCP server running on http://localhost:${PORT}${BASE_PATH}/mcp`);
+  console.log(`Health check: http://localhost:${PORT}${BASE_PATH}/health`);
 });
 
 // Graceful shutdown: notify all subscribers before exiting

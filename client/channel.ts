@@ -99,90 +99,15 @@ const tools = [
     },
   },
   {
-    name: "create_task",
-    description: "Create a new task for the team. Anyone can pick it up.",
+    name: "event",
+    description: "List lifecycle events (e.g. joined, left). Optionally filter by type.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        title: { type: "string", description: "Short task title" },
-        description: { type: "string", description: "Detailed description of what needs to be done" },
-        assignee: { type: "string", description: "Peer name to assign to (optional)" },
-      },
-      required: ["title", "description"],
-    },
-  },
-  {
-    name: "list_tasks",
-    description: "List all tasks and their status.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        status: { type: "string", enum: ["all", "open", "in_progress", "done", "blocked"], description: "Filter by status (default: all)" },
+        type: { type: "string", description: "Filter by event type, e.g. 'joined' or 'left'. Omit for all." },
+        limit: { type: "number", description: "Max number of events to return (default: 20)" },
       },
     },
-  },
-  {
-    name: "claim_task",
-    description: "Assign a task to yourself and set it to in_progress.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        task_id: { type: "string", description: "Task ID, e.g. task-1" },
-      },
-      required: ["task_id"],
-    },
-  },
-  {
-    name: "update_task",
-    description: "Update a task's status or description.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        task_id: { type: "string", description: "Task ID" },
-        status: { type: "string", enum: ["open", "in_progress", "done", "blocked"] },
-        description: { type: "string", description: "Updated description" },
-      },
-      required: ["task_id"],
-    },
-  },
-  {
-    name: "lock_file",
-    description: "Lock a file so other peers know you are editing it. Prevents conflicts.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        path: { type: "string", description: "File path relative to project root, e.g. src/auth.ts" },
-        reason: { type: "string", description: "Why you need this file" },
-      },
-      required: ["path"],
-    },
-  },
-  {
-    name: "unlock_file",
-    description: "Release your lock on a file.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        path: { type: "string", description: "File path to unlock" },
-      },
-      required: ["path"],
-    },
-  },
-  {
-    name: "check_file",
-    description: "Check if a file is locked by someone before editing.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        path: { type: "string", description: "File path to check" },
-      },
-      required: ["path"],
-    },
-  },
-  {
-    name: "list_locks",
-    description: "List all currently locked files.",
-    inputSchema: { type: "object" as const, properties: {} },
   },
   {
     name: "post_decision",
@@ -238,12 +163,6 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     peerName = args.name;
     // Register via /api/call
     const result = await callAPI(toolName, { name: args.name });
-    // Announce join via channel
-    await postJSON(`${dispatcherUrl}/channel/send`, {
-      from: "system",
-      to: "*",
-      content: `${peerName} joined the team.`,
-    });
     // Start listening for events
     subscribeToEvents(peerName);
     return result;
