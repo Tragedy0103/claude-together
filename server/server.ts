@@ -12,6 +12,7 @@ interface Peer {
   name: string;
   sessionId: string;
   status: string; // what this peer is currently doing
+  role: string;   // agent role/description, e.g. "客服" or "infra expert"
   registeredAt: Date;
 }
 
@@ -88,7 +89,10 @@ function createMcpServer(): McpServer {
   server.tool(
     "register",
     "Register yourself with a name. Call this first before using any other tool.",
-    { name: z.string().describe("Your display name, e.g. 'auth-agent' or 'api-agent'") },
+    {
+      name: z.string().describe("Your display name, e.g. 'auth-agent' or 'api-agent'"),
+      role: z.string().optional().describe("Your role or responsibility, e.g. '客服' or 'infra expert'"),
+    },
     async (args, extra) => {
       const sessionId = extra.sessionId ?? "unknown";
       // Allow re-registration: remove old session with same name
@@ -100,6 +104,7 @@ function createMcpServer(): McpServer {
         name: args.name,
         sessionId,
         status: "idle",
+        role: args.role || existing?.role || "",
         registeredAt: new Date(),
       });
       // Record join event (no broadcast — peers can query via `event` tool)
@@ -162,7 +167,7 @@ function createMcpServer(): McpServer {
     async () => {
       const list = Array.from(peers.values());
       if (list.length === 0) return ok("No peers online.");
-      const lines = list.map((p) => `  ${p.name}: ${p.status}`);
+      const lines = list.map((p) => `  ${p.name}: ${p.status}${p.role ? ` — ${p.role}` : ""}`);
       return ok(`Online peers:\n${lines.join("\n")}`);
     }
   );
@@ -303,7 +308,7 @@ function createMcpServer(): McpServer {
       if (peerList.length === 0) {
         sections.push("  (none)");
       } else {
-        for (const p of peerList) sections.push(`  ${p.name}: ${p.status}`);
+        for (const p of peerList) sections.push(`  ${p.name}: ${p.status}${p.role ? ` — ${p.role}` : ""}`);
       }
 
       // Recent decisions
@@ -520,6 +525,7 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
   switch (tool) {
     case "register": {
       const name = args.name as string;
+      const role = (args.role as string) || "";
       const existing = getPeerByName(name);
       if (existing && existing.sessionId !== sessionId) {
         peers.delete(existing.sessionId);
@@ -528,6 +534,7 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
         name,
         sessionId,
         status: "idle",
+        role: role || existing?.role || "",
         registeredAt: new Date(),
       });
       // Record join event (no broadcast)
@@ -568,7 +575,7 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
     case "list_peers": {
       const list = Array.from(peers.values());
       if (list.length === 0) return ok("No peers online.");
-      const lines = list.map((p) => `  ${p.name}: ${p.status}`);
+      const lines = list.map((p) => `  ${p.name}: ${p.status}${p.role ? ` — ${p.role}` : ""}`);
       return ok(`Online peers:\n${lines.join("\n")}`);
     }
     case "send_message": {
@@ -646,7 +653,7 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
       if (peerList.length === 0) {
         sections.push("  (none)");
       } else {
-        for (const p of peerList) sections.push(`  ${p.name}: ${p.status}`);
+        for (const p of peerList) sections.push(`  ${p.name}: ${p.status}${p.role ? ` — ${p.role}` : ""}`);
       }
       sections.push("\n## Recent Decisions");
       const recent = decisions.slice(-5);
@@ -665,7 +672,7 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
 router.get("/health", (_req, res) => {
   res.json({
     status: "ok",
-    peers: Array.from(peers.values()).map((p) => ({ name: p.name, status: p.status })),
+    peers: Array.from(peers.values()).map((p) => ({ name: p.name, status: p.status, role: p.role })),
     decisionCount: decisions.length,
   });
 });
