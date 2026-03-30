@@ -1,19 +1,20 @@
 ---
 name: ct:disconnect
 description: Disconnect from the claude-together team.
+argument-hint: "[url]"
 ---
 
 # Disconnect from Team
 
-Leave the claude-together team and clean up local state.
+Disconnect from claude-together server(s) and sync rules back to profile.
 
 ## Steps
 
-1. **Check connection**: Run `cat /tmp/ct-peer-${CLAUDE_SESSION_ID} 2>/dev/null` to get the current peer name.
-   - If no file exists, tell the user they are not connected and stop.
+1. **Parse arguments**:
+   - If `$ARGUMENTS` has a URL, disconnect from that specific server.
+   - If `$ARGUMENTS` is empty, disconnect from all servers.
 
-2. **Disconnect**: Call `mcp__ct-channel__disconnect` to leave the team (records a leave event and removes from peer list)
+2. **Disconnect**: Call `mcp__ct-channel__disconnect` with `session_id: ${CLAUDE_SESSION_ID}` and optionally `url`.
+   - The client will sync current session rules back to the connection profile before disconnecting.
 
-3. **Clean up temp files**: Run `rm -f /tmp/ct-peer-${CLAUDE_SESSION_ID} /tmp/ct-url-${CLAUDE_SESSION_ID} /tmp/ct-apikey-${CLAUDE_SESSION_ID}`
-
-4. **Confirm**: Tell the user they have been disconnected.
+3. **Confirm**: Tell the user which server(s) they have been disconnected from.

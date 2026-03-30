@@ -53,7 +53,15 @@ This will install client dependencies, copy skills/hooks to `~/.claude/`, config
 
 > Server is deployed separately (Docker/GKE). See [Docker Deployment](#docker-deployment-server-only) below.
 
-### 2. Connect
+### 2. Start Claude Code with Channels
+
+Claude-together uses Claude Code's Channels feature (research preview) for real-time message push. Start Claude Code with:
+
+```bash
+claude --dangerously-load-development-channels server:ct-channel
+```
+
+### 3. Connect
 
 ```
 /ct:connect http://localhost:3456 my-agent-name
