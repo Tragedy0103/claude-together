@@ -12,12 +12,15 @@ Claude Code A ← stdio → Client (channel) ←┐
 Claude Code B ← stdio → Client (channel) ←┘
 ```
 
+Each client can connect to **multiple servers** simultaneously.
+
 ## Project Structure
 
 ```
 claude-together/
 ├── server/          # Dispatcher — shared state hub (Express HTTP + MCP + SSE)
 │   ├── server.ts
+│   ├── Makefile     # Docker/GKE deployment
 │   ├── package.json
 │   └── tsconfig.json
 ├── client/          # Channel — stdio MCP bridge for Claude Code
@@ -28,8 +31,8 @@ claude-together/
 └── README.md
 ```
 
-- **Server** (`server/`) — Express HTTP server. Manages peers, messages, lifecycle events, and decisions. One instance serves all peers.
-- **Client** (`client/`) — stdio MCP server. Bridges Claude Code ↔ Server via SSE. One instance per Claude Code session.
+- **Server** (`server/`) — Express HTTP server. Manages peers (with roles), messages, lifecycle events, and decisions. One instance serves all peers.
+- **Client** (`client/`) — stdio MCP server. Bridges Claude Code ↔ Server via SSE. Supports multi-connection, connection profiles, and session state management. One instance per Claude Code session.
 
 ## Quick Start
 
@@ -52,16 +55,20 @@ This will install client dependencies, copy skills/hooks to `~/.claude/`, config
 
 ### 2. Connect
 
-In each Claude Code session:
-
 ```
 /ct:connect http://localhost:3456 my-agent-name
 ```
 
-To connect to a remote server (e.g. on GKE):
+With auth and role:
 
 ```
-/ct:connect my-agent-name https://ct-server.example.com
+/ct:connect https://server.example.com/path agent-name x-api-key:abc123 infra-expert
+```
+
+Re-connect without arguments (uses saved profile):
+
+```
+/ct:connect
 ```
 
 That's it. Messages will be pushed in real-time between all connected sessions.
@@ -76,38 +83,52 @@ docker build -t claude-together-server .
 docker run -p 3456:3456 claude-together-server
 ```
 
-Then connect from Claude Code with the server URL:
+For GKE deployment:
 
-```
-/ct:connect my-agent-name http://<server-host>:3456
+```bash
+cd server
+make deploy   # Build, push to Artifact Registry, kubectl rollout restart
 ```
 
 ## Slash Commands
 
 | Command | Description |
 |---------|-------------|
-| `/ct:connect <name> [url]` | Join the team, optionally specify server URL |
-| `/ct:disconnect` | Leave the team and clean up |
+| `/ct:install` | First-time setup — install client, configure global settings |
+| `/ct:connect <url> <name> [auth] [role]` | Connect to a server (supports multi-connection) |
+| `/ct:disconnect` | Disconnect and sync rules to profile |
 | `/ct:ask [@peer] <msg>` | Send a message to a peer or broadcast |
-| `/ct:team` | Show full team status |
+| `/ct:team` | Show full team status (peers, roles, decisions) |
 | `/ct:decide [decision]` | Post or list shared decisions |
-| `/ct:session-rules [rule]` | Add/list/clear mandatory session rules (read every response) |
+| `/ct:session-rules [rule]` | Add/list/clear mandatory session rules |
 | `/ct:session-memory [content]` | Save/read/clear session-scoped notes |
+| `/ct:customer-service` | Preset: read-only mode with strict rules |
 
 ## Features
+
+### Multi-Server Connections
+Connect to multiple servers simultaneously. Each connection has its own name, auth, and role.
+
+### Connection Profiles
+Connection details are saved to `~/.claude/ct-connections.json`. Next time you run `/ct:connect` without arguments, saved profiles are presented for selection.
+
+### Peer Roles
+Each peer can declare a role (e.g. "客服", "infra expert") visible in `/ct:team`. Roles are stored in profiles and server-side.
+
+### Persistent Rules
+Session rules added during a session are synced back to the connection profile on disconnect. Next time you connect with the same profile, rules are automatically restored.
 
 ### Real-time Messaging
 Messages are pushed instantly via Claude Code Channels. No polling, no manual `receive_messages`.
 
+### Flexible Auth
+Auth supports any header format: `x-api-key:value`, `Authorization:Bearer token`, or bare value (defaults to `x-api-key`). No auth needed for local servers.
+
 ### Lifecycle Events
-Join and leave events are recorded server-side and queryable via the `event` tool. No broadcast messages are sent — peers can poll when they need to.
+Join and leave events are recorded server-side and queryable via the `event` tool.
 
 ### Shared Decisions
 Record architecture and design decisions that all peers should know about.
-
-```
-/ct:decide Use PostgreSQL - better JSON support
-```
 
 ### Auto-reply via Channel
 When a peer asks a question, the receiving Claude Code answers automatically through the channel — without disturbing the user's main conversation.
@@ -120,7 +141,8 @@ Works across different projects. Any Claude Code session with the global MCP con
 | Category | Tools |
 |----------|-------|
 | Identity | `register`, `disconnect`, `set_status`, `list_peers` |
-| Messaging | `send_message`, `broadcast` |
+| Messaging | `send_message`, `broadcast`, `reply` |
+| Connections | `list_connections` (saved profiles + active connections) |
 | Events | `event` (query join/leave lifecycle events) |
 | Decisions | `post_decision`, `list_decisions` |
 | Overview | `team_status` |
@@ -145,7 +167,9 @@ npm run build     # Compile TypeScript
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3456` | Server listen port |
-| `CT_DISPATCHER_URL` | `http://localhost:3456` | Server URL (used by client) |
+| `BASE_PATH` | `""` | Server route prefix |
+
+Auth is configured per-connection via the `auth` parameter, not via env vars.
 
 ## Limitations
 
