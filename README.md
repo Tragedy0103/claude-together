@@ -38,69 +38,24 @@ claude-together/
 ```bash
 git clone https://github.com/xdite/claude-together.git
 cd claude-together
-npm run install:client   # Client only (most users)
-# npm run install:server # Only if you're hosting your own server
-# npm run install:all    # Both client and server
 ```
 
-### 2. Start the Server
+Open Claude Code in the repo and run:
 
-```bash
-cd server
-npm run dev
+```
+/ct:install
 ```
 
-This starts the dispatcher on `http://localhost:3456`.
+This will install client dependencies, copy skills/hooks to `~/.claude/`, configure MCP server and settings — all automatically with confirmation prompts.
 
-### 3. Configure Claude Code
+> Server is deployed separately (Docker/GKE). See [Docker Deployment](#docker-deployment-server-only) below.
 
-Add the channel MCP server to your project `.mcp.json` (or global `~/.claude.json` for cross-project use):
-
-```json
-{
-  "mcpServers": {
-    "ct-channel": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/claude-together/client/channel.ts"]
-    }
-  }
-}
-```
-
-> Replace `/path/to/claude-together` with the actual path.
-
-Copy the skills and hooks to your global Claude Code config:
-
-```bash
-cp -r .claude/skills/ct:* ~/.claude/skills/
-cp .claude/hooks/ct-cleanup.sh ~/.claude/hooks/
-```
-
-Add the cleanup hook to `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh ~/.claude/hooks/ct-cleanup.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-### 4. Connect
+### 2. Connect
 
 In each Claude Code session:
 
 ```
-/ct:connect my-agent-name
+/ct:connect http://localhost:3456 my-agent-name
 ```
 
 To connect to a remote server (e.g. on GKE):
