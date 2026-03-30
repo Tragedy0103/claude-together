@@ -356,13 +356,16 @@ function subscribeToEvents(name: string) {
       });
 
       res.on("end", () => {
+        process.stderr.write(`[ct-channel] SSE disconnected, reconnecting in 1s...\n`);
         setTimeout(makeRequest, 1000);
       });
 
-      res.on("error", () => {
+      res.on("error", (err) => {
+        process.stderr.write(`[ct-channel] SSE error: ${err.message}, reconnecting in 3s...\n`);
         setTimeout(makeRequest, 3000);
       });
-    }).on("error", () => {
+    }).on("error", (err) => {
+      process.stderr.write(`[ct-channel] SSE connection failed: ${err.message}, retrying in 3s...\n`);
       setTimeout(makeRequest, 3000);
     });
   };
@@ -390,7 +393,10 @@ function postJSON(url: string, body: Record<string, string>): Promise<void> {
         res.on("end", resolve);
       }
     );
-    req.on("error", () => resolve()); // don't crash on send failures
+    req.on("error", (e) => {
+      process.stderr.write(`[ct-channel] send failed: ${e.message}\n`);
+      resolve();
+    });
     req.write(data);
     req.end();
   });
