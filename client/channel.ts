@@ -564,11 +564,13 @@ function subscribeToEvents(conn: Connection) {
             }
             try {
               const msg = JSON.parse(data) as { from: string; content: string; timestamp: string };
+              // Prefix with server hostname when multiple connections active
+              const prefix = connections.size > 1 ? `[${new URL(conn.url).hostname}] ` : "";
               mcp.notification({
                 method: "notifications/claude/channel",
                 params: {
-                  content: msg.content,
-                  meta: { from: msg.from, ts: msg.timestamp },
+                  content: `${prefix}${msg.content}`,
+                  meta: { from: msg.from, ts: msg.timestamp, server: conn.url },
                 },
               });
             } catch { /* ignore */ }
