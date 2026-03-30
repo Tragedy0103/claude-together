@@ -423,6 +423,10 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
 async function registerConnection(url: string, name: string, auth: string, role: string = "", sessionId: string = ""): Promise<string> {
   let conn = connections.get(url);
   if (conn) {
+    // If name is changing, disconnect old peer from server first to avoid ghost entries
+    if (conn.name !== name) {
+      await callAPI(conn, "disconnect", {}).catch(() => {});
+    }
     conn.name = name;
     if (role) conn.role = role;
     if (auth) {
