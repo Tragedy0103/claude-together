@@ -326,6 +326,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const authStr = (conn.authHeader && conn.authValue) ? `${conn.authHeader}:${conn.authValue}` : "";
       if (currentRules.length > 0) saveProfile(conn.url, conn.name, authStr, conn.role, currentRules);
       await disconnectOne(conn);
+      if (sid) saveSession(`/tmp/ct-session-${sid}.json`);
       return ok(`Disconnected from ${args.url}.`);
     }
     // Disconnect all
@@ -334,6 +335,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       if (currentRules.length > 0) saveProfile(conn.url, conn.name, authStr, conn.role, currentRules);
       await disconnectOne(conn);
     }
+    if (sid) saveSession(`/tmp/ct-session-${sid}.json`);
     return ok(`Disconnected from all servers.`);
   }
 
@@ -444,6 +446,11 @@ interface ConnectionProfile {
 
 function loadProfiles(): ConnectionProfile[] {
   try { return JSON.parse(fs.readFileSync(PROFILES_PATH, "utf-8")); } catch { return []; }
+}
+
+function removeProfile(url: string) {
+  const profiles = loadProfiles().filter(p => p.url !== url);
+  try { fs.writeFileSync(PROFILES_PATH, JSON.stringify(profiles, null, 2)); } catch { /* ignore */ }
 }
 
 function saveProfile(url: string, name: string, auth: string, role: string, rules: string[]) {
