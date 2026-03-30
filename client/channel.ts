@@ -43,6 +43,12 @@ function httpFor(url: string | URL): typeof http | typeof https {
   return u.protocol === "https:" ? https : http;
 }
 
+/** Normalize common URL typos (e.g. "http:localhost:3456" → "http://localhost:3456") */
+function normalizeUrl(raw: string): string {
+  // Fix missing // after protocol (e.g. "http:localhost" or "https:example.com")
+  return raw.replace(/^(https?):(?!\/)/, "$1://");
+}
+
 // Get all connections as array
 function allConns(): Connection[] {
   return Array.from(connections.values());
@@ -273,7 +279,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
 
     // New or update connection
-    const url = args.url?.replace(/\/+$/, "");
+    const url = args.url ? normalizeUrl(args.url).replace(/\/+$/, "") : "";
     if (!url) return err("Server URL is required.");
     try { new URL(url); } catch { return err(`Invalid URL "${url}".`); }
     if (!args.name) return err("Name is required.");

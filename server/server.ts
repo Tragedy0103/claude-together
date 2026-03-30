@@ -64,6 +64,10 @@ function requirePeer(sessionId: string): { peer: Peer } | { error: string } {
   return { peer };
 }
 
+class PeerNotFoundError extends Error {
+  constructor() { super("Not registered."); }
+}
+
 function err(text: string) {
   return { content: [{ type: "text" as const, text: `Error: ${text}` }] };
 }
@@ -500,6 +504,7 @@ router.post("/api/call", async (req, res) => {
       name: peer,
       sessionId,
       status: "idle",
+      role: "",
       registeredAt: new Date(),
     });
   }
@@ -516,13 +521,13 @@ router.post("/api/call", async (req, res) => {
 
 // Direct tool execution (bypasses MCP transport)
 async function executeToolDirect(sessionId: string, tool: string, args: Record<string, unknown>): Promise<{ content: { type: string; text: string }[] }> {
-  const r = () => {
+  const requirePeerDirect = (): Peer => {
     const peer = peers.get(sessionId);
-    if (!peer) return { error: "Not registered." };
-    return { peer };
+    if (!peer) throw new PeerNotFoundError();
+    return peer;
   };
 
-  switch (tool) {
+  try { switch (tool) {
     case "register": {
       const name = args.name as string;
       const role = (args.role as string) || "";
@@ -553,9 +558,8 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
       return ok(summary.join(""));
     }
     case "disconnect": {
-      const p = r();
-      if ("error" in p) return err(p.error);
-      const dName = p.peer.name;
+      const peer = requirePeerDirect();
+      const dName = peer.name;
       events.push({
         id: randomUUID(),
         type: "left",
@@ -567,9 +571,8 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
       return ok(`Disconnected "${dName}" from the team.`);
     }
     case "set_status": {
-      const p = r();
-      if ("error" in p) return err(p.error);
-      p.peer.status = args.status as string;
+      const peer = requirePeerDirect();
+      peer.status = args.status as string;
       return ok(`Status updated to: "${args.status}"`);
     }
     case "list_peers": {
@@ -579,35 +582,32 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
       return ok(`Online peers:\n${lines.join("\n")}`);
     }
     case "send_message": {
-      const p = r();
-      if ("error" in p) return err(p.error);
+      const peer = requirePeerDirect();
       if (!getPeerByName(args.to as string)) return err(`Peer "${args.to}" not found.`);
       messages.push({
         id: randomUUID(),
-        from: p.peer.name,
+        from: peer.name,
         to: args.to as string,
         content: args.message as string,
         timestamp: new Date(),
-        readBy: new Set([p.peer.name]),
+        readBy: new Set([peer.name]),
       });
       return ok(`Message sent to "${args.to}".`);
     }
     case "broadcast": {
-      const p = r();
-      if ("error" in p) return err(p.error);
+      const peer = requirePeerDirect();
       messages.push({
         id: randomUUID(),
-        from: p.peer.name,
+        from: peer.name,
         to: "*",
         content: args.message as string,
         timestamp: new Date(),
-        readBy: new Set([p.peer.name]),
+        readBy: new Set([peer.name]),
       });
       return ok("Message broadcast to all peers.");
     }
     case "event": {
-      const p = r();
-      if ("error" in p) return err(p.error);
+      requirePeerDirect();
       let list = [...events];
       if (args.type) list = list.filter((e) => e.type === (args.type as string));
       const max = (args.limit as number) ?? 20;
@@ -619,13 +619,12 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
       return ok(`Events:\n${lines.join("\n")}`);
     }
     case "post_decision": {
-      const p = r();
-      if ("error" in p) return err(p.error);
+      const peer = requirePeerDirect();
       const decision: Decision = {
         id: randomUUID(),
         title: args.title as string,
         content: args.content as string,
-        createdBy: p.peer.name,
+        createdBy: peer.name,
         createdAt: new Date(),
       };
       decisions.push(decision);
@@ -635,7 +634,7 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
         to: "*",
         content: `New decision: "${args.title}" — ${args.content}`,
         timestamp: new Date(),
-        readBy: new Set([p.peer.name]),
+        readBy: new Set([peer.name]),
       });
       return ok(`Decision posted: "${args.title}"`);
     }
@@ -666,6 +665,9 @@ async function executeToolDirect(sessionId: string, tool: string, args: Record<s
     }
     default:
       return err(`Unknown tool: ${tool}`);
+  } } catch (e) {
+    if (e instanceof PeerNotFoundError) return err(e.message);
+    throw e;
   }
 }
 
