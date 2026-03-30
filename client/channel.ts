@@ -447,7 +447,7 @@ async function registerConnection(url: string, name: string, auth: string, role:
 
   // Load profile rules and apply to session
   const authStr = (conn.authHeader && conn.authValue) ? `${conn.authHeader}:${conn.authValue}` : "";
-  const existingProfile = loadProfiles().find(p => p.url === url);
+  const existingProfile = loadProfiles().find(p => p.url === url && p.name === name);
   if (sessionId && existingProfile?.rules?.length) {
     applyProfileRules(sessionId, existingProfile.rules);
   }
@@ -495,14 +495,14 @@ function loadProfiles(): ConnectionProfile[] {
   try { return JSON.parse(fs.readFileSync(PROFILES_PATH, "utf-8")); } catch { return []; }
 }
 
-function removeProfile(url: string) {
-  const profiles = loadProfiles().filter(p => p.url !== url);
+function removeProfile(url: string, name: string) {
+  const profiles = loadProfiles().filter(p => !(p.url === url && p.name === name));
   try { fs.writeFileSync(PROFILES_PATH, JSON.stringify(profiles, null, 2)); } catch { /* ignore */ }
 }
 
 function saveProfile(url: string, name: string, auth: string, role: string, rules: string[]) {
   const profiles = loadProfiles();
-  const idx = profiles.findIndex(p => p.url === url);
+  const idx = profiles.findIndex(p => p.url === url && p.name === name);
   const profile: ConnectionProfile = { url, name, auth, role, rules };
   if (idx >= 0) profiles[idx] = profile; else profiles.push(profile);
   try { fs.writeFileSync(PROFILES_PATH, JSON.stringify(profiles, null, 2)); } catch { /* ignore */ }

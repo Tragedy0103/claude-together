@@ -15,10 +15,9 @@ Register yourself with the claude-together server via the channel client. Suppor
      Auth format: `Header-Name:value`（如 `x-api-key:abc123`）。裸值預設 `x-api-key`。本地不需要。
      Role: 可選的職責描述，會在 `/ct:team` 時顯示（如「客服」、「infra expert」）。
    - If `$ARGUMENTS` is empty:
-     1. First try resume: call `mcp__ct-channel__register` with only `session_id: ${CLAUDE_SESSION_ID}`.
-     2. If resume fails, call `mcp__ct-channel__list_connections` to get saved profiles.
-     3. Show the saved profiles to the user and ask which one to connect to (or enter new params).
-     4. Once the user picks, use that profile's url/name/auth/role to register.
+     1. Call `mcp__ct-channel__list_connections` to get saved profiles.
+     2. Show the saved profiles to the user and ask which one to connect to (or enter new params).
+     3. Once the user picks, use that profile's url/name/auth/role to register.
 
 2. **Register**: Call `mcp__ct-channel__register` with `session_id: ${CLAUDE_SESSION_ID}`, `name`, `url`, and optionally `auth` and `role`.
    - **CRITICAL: 將使用者提供的 URL 原封不動傳入 `url` 參數，不可截斷、修改、或省略任何路徑段。**
