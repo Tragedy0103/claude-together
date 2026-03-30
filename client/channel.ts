@@ -312,7 +312,7 @@ function subscribeToEvents(name: string) {
     currentSSE = null;
   }
 
-  const url = new URL(`/channel/subscribe/${encodeURIComponent(name)}`, dispatcherUrl);
+  const url = new URL(`${dispatcherUrl}/channel/subscribe/${encodeURIComponent(name)}`);
   const transport = httpFor(url);
 
   const makeRequest = () => {
