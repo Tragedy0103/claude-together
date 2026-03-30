@@ -112,6 +112,25 @@ Connect to multiple servers simultaneously. Each connection has its own name, au
 ### Connection Profiles
 Connection details are saved to `~/.claude/ct-connections.json`. Next time you run `/ct:connect` without arguments, saved profiles are presented for selection.
 
+### Session State & Statusline
+
+Active connections are written to `/tmp/ct-session-{CLAUDE_SESSION_ID}.json` for the statusline and other tools to read.
+
+To display connection info in the Claude Code statusline, add to `~/.claude/settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  }
+}
+```
+
+The statusline reads the session JSON and shows the connection status:
+
+![statusline example](docs/statusline-example.png)
+
 ### Peer Roles
 Each peer can declare a role (e.g. "客服", "infra expert") visible in `/ct:team`. Roles are stored in profiles and server-side.
 
