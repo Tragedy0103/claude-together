@@ -9,9 +9,25 @@ import http from "http";
 import https from "https";
 
 let dispatcherUrl = process.env.CT_DISPATCHER_URL ?? "";
-let apiKey = process.env.CT_API_KEY ?? "";
+let authHeader = ""; // e.g. "x-api-key" or "Authorization"
+let authValue = "";  // e.g. "abc123" or "Bearer token"
 
 let peerName: string | null = null;
+
+// Parse auth string: "Header-Name:value" or just "value" (defaults to x-api-key)
+function parseAuth(auth: string): { header: string; value: string } {
+  const colonIdx = auth.indexOf(":");
+  if (colonIdx > 0 && !auth.startsWith("http")) {
+    return { header: auth.slice(0, colonIdx).trim(), value: auth.slice(colonIdx + 1).trim() };
+  }
+  // Backward compat: bare value = x-api-key
+  return { header: "x-api-key", value: auth };
+}
+
+function authHeaders(): Record<string, string> {
+  if (authHeader && authValue) return { [authHeader]: authValue };
+  return {};
+}
 
 // Pick http or https based on URL protocol
 function httpFor(url: string | URL): typeof http | typeof https {
@@ -51,7 +67,7 @@ const tools = [
       properties: {
         name: { type: "string", description: "Your display name, e.g. 'auth-agent' or 'api-agent'. Optional if resuming via session_id." },
         url: { type: "string", description: "Server URL to connect to. Optional if resuming via session_id." },
-        api_key: { type: "string", description: "API key for remote server authentication. Not needed for local servers." },
+        auth: { type: "string", description: "Auth header for remote server. Format: 'Header-Name:value' (e.g. 'x-api-key:abc123' or 'Authorization:Bearer token'). Bare value defaults to x-api-key. Not needed for local servers." },
         session_id: { type: "string", description: "Claude session ID (CLAUDE_SESSION_ID). Used to save/resume session state." },
       },
       required: ["session_id"],
@@ -184,7 +200,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
         const saved = JSON.parse(fs.readFileSync(sessionFile, "utf-8"));
         if (saved.name) args.name = saved.name;
         if (saved.url) args.url = saved.url;
-        if (saved.apikey) args.api_key = saved.apikey;
+        if (saved.auth) args.auth = saved.auth;
       } catch { /* no saved state */ }
     }
 
@@ -200,8 +216,10 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     } catch {
       return { content: [{ type: "text", text: `Error: invalid URL "${dispatcherUrl}". Must be a full URL like http://localhost:3456 or https://server.example.com` }] };
     }
-    if (args.api_key) {
-      apiKey = args.api_key;
+    if (args.auth) {
+      const parsed = parseAuth(args.auth);
+      authHeader = parsed.header;
+      authValue = parsed.value;
     }
     if (!args.name) {
       return { content: [{ type: "text", text: "Error: name is required. Pass it as the `name` parameter, or provide `session_id` to resume." }] };
@@ -214,7 +232,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     // Write session state file
     if (sessionFile) {
       try {
-        const state = JSON.stringify({ name: peerName, url: dispatcherUrl, apikey: apiKey || "" });
+        const state = JSON.stringify({ name: peerName, url: dispatcherUrl, auth: (authHeader && authValue) ? `${authHeader}:${authValue}` : "" });
         fs.writeFileSync(sessionFile, state);
       } catch { /* ignore write errors */ }
     }
@@ -261,7 +279,7 @@ async function callAPI(tool: string, args: Record<string, unknown>): Promise<{ c
         port: parsed.port || (parsed.protocol === "https:" ? "443" : "80"),
         path: parsed.pathname,
         method: "POST",
-        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), "x-api-key": apiKey },
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), ...authHeaders() },
       },
       (res) => {
         let data = "";
@@ -298,7 +316,7 @@ function subscribeToEvents(name: string) {
   const transport = httpFor(url);
 
   const makeRequest = () => {
-    transport.get(url.toString(), { headers: { "x-api-key": apiKey } }, (res) => {
+    transport.get(url.toString(), { headers: authHeaders() }, (res) => {
       currentSSE = res;
       let buffer = "";
 
@@ -365,7 +383,7 @@ function postJSON(url: string, body: Record<string, string>): Promise<void> {
         port: parsed.port || (parsed.protocol === "https:" ? "443" : "80"),
         path: parsed.pathname,
         method: "POST",
-        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data), "x-api-key": apiKey },
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data), ...authHeaders() },
       },
       (res) => {
         res.resume();

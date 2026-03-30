@@ -11,13 +11,14 @@ Register yourself with the claude-together server via the channel client.
 ## Steps
 
 1. **Parse arguments and register**:
-   - If `$ARGUMENTS` is provided, parse it: first word is the server URL, second word is the name, third word (if present) is the API key.
-     Call `mcp__ct-channel__register` with `session_id: ${CLAUDE_SESSION_ID}`, `name`, `url`, and optionally `api_key`.
+   - If `$ARGUMENTS` is provided, parse it: first word is the server URL, second word is the name, third word (if present) is the auth string.
+     Auth format: `Header-Name:value`（如 `x-api-key:abc123` 或 `Authorization:Bearer token`）。如果只有 value 沒有冒號，預設使用 `x-api-key`。本地 server 不需要 auth。
+     Call `mcp__ct-channel__register` with `session_id: ${CLAUDE_SESSION_ID}`, `name`, `url`, and optionally `auth`.
      **CRITICAL: 將使用者提供的 URL 原封不動傳入 `url` 參數，不可截斷、修改、或省略任何路徑段。**
    - If `$ARGUMENTS` is empty (resume), call `mcp__ct-channel__register` with only `session_id: ${CLAUDE_SESSION_ID}`.
      The client will automatically read saved session state from `/tmp/ct-session-${CLAUDE_SESSION_ID}.json`.
    - If resume fails (no saved state), ask the user for the server URL and name.
-   - Session state (`name`, `url`, `apikey`) is managed entirely by the client — do NOT read or write session files manually.
+   - Session state (`name`, `url`, `auth`) is managed entirely by the client — do NOT read or write session files manually.
 
 2. **Disconnect old connection if switching**: If the register response shows a different URL than expected, call `mcp__ct-channel__disconnect` first, then re-register.
 
