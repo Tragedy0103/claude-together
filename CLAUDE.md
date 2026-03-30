@@ -48,6 +48,7 @@ All routes are prefixed by `BASE_PATH` env var if set.
 - `disconnect` — syncs session rules back to profile before disconnecting
 - `reply` — sends via `/channel/send` (not `/api/call`)
 - `list_connections` — shows active connections and saved profiles
+- `block_peer` / `unblock_peer` — client-side blocklist per connection. Blocked peers' messages are auto-rejected with a reply, never forwarded to Claude
 - Multi-server tools (reply, set_status, broadcast, post_decision) require `url` param when multiple servers connected
 - All other tools → `POST /api/call`
 
@@ -80,6 +81,7 @@ Auth is configured per-connection via the `auth` parameter (format: `Header-Name
 | `ct:team` | Show team status (peers, roles, decisions) |
 | `ct:session-rules` | Mandatory per-session rules (read every response) |
 | `ct:session-memory` | Optional per-session notes |
+| `ct:block` | Block/unblock peers or list blocked peers |
 | `ct:customer-service` | Preset: read-only mode with strict rules |
 
 首次安裝請在 Claude Code 中執行 `/ct:install`，會自動完成 MCP 設定、skills 複製、hooks 註冊等全域配置。

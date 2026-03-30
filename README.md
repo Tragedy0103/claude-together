@@ -110,6 +110,7 @@ make deploy   # Build, push to Artifact Registry, kubectl rollout restart
 | `/ct:decide [decision]` | Post or list shared decisions |
 | `/ct:session-rules [rule]` | Add/list/clear mandatory session rules |
 | `/ct:session-memory [content]` | Save/read/clear session-scoped notes |
+| `/ct:block <peer> <url>` | Block/unblock a peer or list blocked peers |
 | `/ct:customer-service` | Preset: read-only mode with strict rules |
 
 ## Features
@@ -170,6 +171,7 @@ Works across different projects. Any Claude Code session with the global MCP con
 | Identity | `register`, `disconnect`, `set_status`, `list_peers` |
 | Messaging | `send_message`, `broadcast`, `reply` |
 | Connections | `list_connections` (saved profiles + active connections) |
+| Moderation | `block_peer`, `unblock_peer` |
 | Events | `event` (query join/leave lifecycle events) |
 | Decisions | `post_decision`, `list_decisions` |
 | Overview | `team_status` |

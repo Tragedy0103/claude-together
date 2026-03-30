@@ -19,6 +19,7 @@ interface Connection {
   role: string;
   authHeader: string;
   authValue: string;
+  blocklist: Set<string>;
   sse: http.IncomingMessage | null;
   sseConnectedOnce: boolean;
 }
@@ -210,6 +211,30 @@ const tools = [
     },
   },
   {
+    name: "block_peer",
+    description: "Block a peer on a specific server. Messages from blocked peers are auto-rejected by the client.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        peer: { type: "string", description: "Peer name to block" },
+        url: { type: "string", description: "Server URL where this peer should be blocked." },
+      },
+      required: ["peer", "url"],
+    },
+  },
+  {
+    name: "unblock_peer",
+    description: "Unblock a previously blocked peer on a specific server.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        peer: { type: "string", description: "Peer name to unblock" },
+        url: { type: "string", description: "Server URL where this peer should be unblocked." },
+      },
+      required: ["peer", "url"],
+    },
+  },
+  {
     name: "list_connections",
     description: "List saved connection profiles and currently active connections.",
     inputSchema: { type: "object" as const, properties: {} },
@@ -236,6 +261,22 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   const toolName = req.params.name;
   const args = (req.params.arguments ?? {}) as Record<string, string>;
 
+  // --- block_peer ---
+  if (toolName === "block_peer") {
+    const conn = findConn(args.url);
+    if (!conn) return err(`Not connected to ${args.url}.`);
+    conn.blocklist.add(args.peer);
+    return ok(`Blocked "${args.peer}" on ${args.url}. Messages from this peer will be auto-rejected.`);
+  }
+
+  // --- unblock_peer ---
+  if (toolName === "unblock_peer") {
+    const conn = findConn(args.url);
+    if (!conn) return err(`Not connected to ${args.url}.`);
+    conn.blocklist.delete(args.peer);
+    return ok(`Unblocked "${args.peer}" on ${args.url}.`);
+  }
+
   // --- list_connections ---
   if (toolName === "list_connections") {
     const sections: string[] = [];
@@ -244,7 +285,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (active.length > 0) {
       sections.push("## Active Connections");
       for (const c of active) {
-        sections.push(`  - ${c.name}${c.role ? ` (${c.role})` : ""} @ ${c.url}`);
+        let line = `  - ${c.name}${c.role ? ` (${c.role})` : ""} @ ${c.url}`;
+        if (c.blocklist.size > 0) line += ` [blocked: ${Array.from(c.blocklist).join(", ")}]`;
+        sections.push(line);
       }
     }
     // Saved profiles
@@ -389,7 +432,7 @@ async function registerConnection(url: string, name: string, auth: string, role:
     }
   } else {
     const parsed = auth ? parseAuth(auth) : { header: "", value: "" };
-    conn = { url, name, role, authHeader: parsed.header, authValue: parsed.value, sse: null, sseConnectedOnce: false };
+    conn = { url, name, role, authHeader: parsed.header, authValue: parsed.value, blocklist: new Set(), sse: null, sseConnectedOnce: false };
     connections.set(url, conn);
   }
 
@@ -571,6 +614,15 @@ function subscribeToEvents(conn: Connection) {
             }
             try {
               const msg = JSON.parse(data) as { from: string; content: string; timestamp: string };
+              // Block check: auto-reply and skip
+              if (conn.blocklist.has(msg.from)) {
+                postJSON(conn, `${conn.url}/channel/send`, {
+                  from: conn.name,
+                  to: msg.from,
+                  content: "Your messages are currently blocked.",
+                });
+                continue;
+              }
               // Prefix with server hostname when multiple connections active
               const prefix = connections.size > 1 ? `[${new URL(conn.url).hostname}] ` : "";
               mcp.notification({
