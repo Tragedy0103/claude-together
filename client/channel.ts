@@ -545,6 +545,7 @@ function listProfiles(): string {
   if (profiles.length === 0) return "No saved connections.";
   return profiles.map((p, i) => {
     let line = `  ${i + 1}. ${p.name}${p.role ? ` (${p.role})` : ""} @ ${p.url}`;
+    if (p.auth) line += `\n     auth: ${p.auth}`;
     if (p.rules?.length) line += `\n     rules: ${p.rules.length} rule(s)`;
     return line;
   }).join("\n");
