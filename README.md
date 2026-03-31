@@ -111,7 +111,9 @@ make deploy   # Build, push to Artifact Registry, kubectl rollout restart
 | `/ct:session-rules [rule]` | Add/list/clear mandatory session rules |
 | `/ct:session-memory [content]` | Save/read/clear session-scoped notes |
 | `/ct:block <peer> <url>` | Block/unblock a peer or list blocked peers |
-| `/ct:customer-service` | Preset: read-only mode with strict rules |
+| `/ct:rules-init-cs` | Preset: read-only customer service mode with strict rules |
+| `/ct:rules-init-pm` | Preset: PM mode for architecture guidance and team coordination |
+| `/ct:rules-init-rd` | Preset: RD mode for collaborative development workflow |
 
 ## Features
 

@@ -82,7 +82,9 @@ Auth is configured per-connection via the `auth` parameter (format: `Header-Name
 | `ct:session-rules` | Mandatory per-session rules (read every response) |
 | `ct:session-memory` | Optional per-session notes |
 | `ct:block` | Block/unblock peers or list blocked peers |
-| `ct:customer-service` | Preset: read-only mode with strict rules |
+| `ct:rules-init-cs` | Preset: read-only customer service mode with strict rules |
+| `ct:rules-init-pm` | Preset: PM mode for architecture guidance and team coordination |
+| `ct:rules-init-rd` | Preset: RD mode for collaborative development workflow |
 
 首次安裝請在 Claude Code 中執行 `/ct:install`，會自動完成 MCP 設定、skills 複製、hooks 註冊等全域配置。
 
