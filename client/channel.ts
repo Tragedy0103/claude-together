@@ -446,6 +446,14 @@ async function registerConnection(url: string, name: string, auth: string, role:
   const registerArgs: Record<string, string> = { name };
   if (conn.role) registerArgs.role = conn.role;
   const result = await callAPI(conn, "register", registerArgs);
+  const text = result?.content?.[0]?.text;
+
+  // If registration failed, clean up and don't save profile
+  if (!text || text.startsWith("Error:")) {
+    connections.delete(url);
+    return `[${url}] ${text || "Registration failed — check auth and URL."}`;
+  }
+
   subscribeToEvents(conn);
 
   // Load profile rules and apply to session
@@ -457,7 +465,7 @@ async function registerConnection(url: string, name: string, auth: string, role:
 
   // Save profile (rules will be synced back on disconnect)
   saveProfile(url, name, authStr, conn.role, existingProfile?.rules || []);
-  return `[${url}] ${result.content[0]?.text ?? "Registered."}`;
+  return `[${url}] ${text}`;
 }
 
 async function disconnectOne(conn: Connection) {
