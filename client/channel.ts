@@ -364,13 +364,13 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   if (toolName === "disconnect") {
     // Sync session rules back to profile before disconnecting
     const sid = args.session_id || "";
-    const currentRules = sid ? readSessionRules(sid) : [];
+    const currentRules = sid ? readSessionRules(sid) : "";
 
     if (args.url) {
       const conn = connections.get(args.url);
       if (!conn) return err(`Not connected to ${args.url}.`);
       const authStr = (conn.authHeader && conn.authValue) ? `${conn.authHeader}:${conn.authValue}` : "";
-      if (currentRules.length > 0) saveProfile(conn.url, conn.name, authStr, conn.role, currentRules);
+      if (currentRules) saveProfile(conn.url, conn.name, authStr, conn.role, currentRules);
       await disconnectOne(conn);
       if (sid) saveSession(`/tmp/ct-session-${sid}.json`);
       return ok(`Disconnected from ${args.url}.`);
@@ -378,7 +378,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     // Disconnect all
     for (const conn of allConns()) {
       const authStr = (conn.authHeader && conn.authValue) ? `${conn.authHeader}:${conn.authValue}` : "";
-      if (currentRules.length > 0) saveProfile(conn.url, conn.name, authStr, conn.role, currentRules);
+      if (currentRules) saveProfile(conn.url, conn.name, authStr, conn.role, currentRules);
       await disconnectOne(conn);
     }
     if (sid) saveSession(`/tmp/ct-session-${sid}.json`);
@@ -459,12 +459,12 @@ async function registerConnection(url: string, name: string, auth: string, role:
   // Load profile rules and apply to session
   const authStr = (conn.authHeader && conn.authValue) ? `${conn.authHeader}:${conn.authValue}` : "";
   const existingProfile = loadProfiles().find(p => p.url === url && p.name === name);
-  if (sessionId && existingProfile?.rules?.length) {
+  if (sessionId && existingProfile?.rules) {
     applyProfileRules(sessionId, existingProfile.rules);
   }
 
   // Save profile (rules will be synced back on disconnect)
-  saveProfile(url, name, authStr, conn.role, existingProfile?.rules || []);
+  saveProfile(url, name, authStr, conn.role, existingProfile?.rules || "");
   return `[${url}] ${text}`;
 }
 
@@ -499,7 +499,7 @@ interface ConnectionProfile {
   name: string;
   auth: string;
   role: string;
-  rules: string[];
+  rules: string;
 }
 
 function loadProfiles(): ConnectionProfile[] {
@@ -511,7 +511,7 @@ function removeProfile(url: string, name: string) {
   try { fs.writeFileSync(PROFILES_PATH, JSON.stringify(profiles, null, 2)); } catch { /* ignore */ }
 }
 
-function saveProfile(url: string, name: string, auth: string, role: string, rules: string[]) {
+function saveProfile(url: string, name: string, auth: string, role: string, rules: string) {
   const profiles = loadProfiles();
   const idx = profiles.findIndex(p => p.url === url && p.name === name);
   const profile: ConnectionProfile = { url, name, auth, role, rules };
@@ -519,33 +519,21 @@ function saveProfile(url: string, name: string, auth: string, role: string, rule
   try { fs.writeFileSync(PROFILES_PATH, JSON.stringify(profiles, null, 2)); } catch { /* ignore */ }
 }
 
-// Write profile rules to session rules file, merge with existing session rules
-function applyProfileRules(sessionId: string, rules: string[]) {
-  if (!rules || rules.length === 0) return;
+// Write profile rules to session rules file
+function applyProfileRules(sessionId: string, rules: string) {
+  if (!rules) return;
   const rulesFile = `/tmp/claude-session-rules-${sessionId}.md`;
-  // Read existing session rules
-  let existing: string[] = [];
-  try {
-    const content = fs.readFileSync(rulesFile, "utf-8").trim();
-    if (content) existing = content.split("\n").map(l => l.replace(/^\d+\.\s*/, "").trim()).filter(Boolean);
-  } catch { /* no existing rules */ }
-  // Merge: add profile rules that aren't already present
-  const merged = [...existing];
-  for (const rule of rules) {
-    if (!merged.includes(rule)) merged.push(rule);
-  }
-  // Write numbered rules
-  const numbered = merged.map((r, i) => `${i + 1}. ${r}`).join("\n");
-  try { fs.writeFileSync(rulesFile, numbered); } catch { /* ignore */ }
+  let existing = "";
+  try { existing = fs.readFileSync(rulesFile, "utf-8").trim(); } catch { /* no existing rules */ }
+  const content = existing ? `${existing}\n${rules}` : rules;
+  try { fs.writeFileSync(rulesFile, content); } catch { /* ignore */ }
 }
 
 // Read current session rules back (for saving to profile)
-function readSessionRules(sessionId: string): string[] {
+function readSessionRules(sessionId: string): string {
   try {
-    const content = fs.readFileSync(`/tmp/claude-session-rules-${sessionId}.md`, "utf-8").trim();
-    if (!content) return [];
-    return content.split("\n").map(l => l.replace(/^\d+\.\s*/, "").trim()).filter(Boolean);
-  } catch { return []; }
+    return fs.readFileSync(`/tmp/claude-session-rules-${sessionId}.md`, "utf-8").trim();
+  } catch { return ""; }
 }
 
 function listProfiles(): string {
@@ -554,7 +542,7 @@ function listProfiles(): string {
   return profiles.map((p, i) => {
     let line = `  ${i + 1}. ${p.name}${p.role ? ` (${p.role})` : ""} @ ${p.url}`;
     if (p.auth) line += `\n     auth: ${p.auth}`;
-    if (p.rules?.length) line += `\n     rules: ${p.rules.length} rule(s)`;
+    if (p.rules) line += `\n     rules: yes`;
     return line;
   }).join("\n");
 }
