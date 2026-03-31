@@ -646,6 +646,10 @@ function subscribeToEvents(conn: Connection) {
             if (data === "connected") {
               if (conn.sseConnectedOnce) {
                 callAPI(conn, "register", { name: conn.name }).catch(() => {});
+                enqueueMessage({
+                  content: "SSE reconnected",
+                  meta: { from: "system", ts: new Date().toISOString(), server: conn.url },
+                });
               }
               conn.sseConnectedOnce = true;
               continue;
