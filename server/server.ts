@@ -417,10 +417,16 @@ router.get("/channel/subscribe/:peerName", (req, res) => {
   });
   res.write("data: connected\n\n");
 
+  // SSE heartbeat to prevent proxy/LB idle timeout
+  const heartbeat = setInterval(() => {
+    try { res.write(": heartbeat\n\n"); } catch { clearInterval(heartbeat); }
+  }, 30_000);
+
   channelSubscribers.set(peerName, { peerName, res });
   console.log(`[channel] ${peerName} subscribed to events`);
 
   req.on("close", () => {
+    clearInterval(heartbeat);
     channelSubscribers.delete(peerName);
     console.log(`[channel] ${peerName} unsubscribed`);
   });

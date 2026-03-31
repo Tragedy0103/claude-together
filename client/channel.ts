@@ -347,13 +347,16 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       return err(`Multiple servers connected. Specify url parameter:\n${urls.join("\n")}`);
     }
     const to = args.to || "*";
+    const errors: string[] = [];
     for (const conn of conns) {
-      await postJSON(conn, `${conn.url}/channel/send`, {
+      const error = await postJSON(conn, `${conn.url}/channel/send`, {
         from: conn.name,
         to,
         content: args.text,
       });
+      if (error) errors.push(`[${conn.url}] ${error}`);
     }
+    if (errors.length > 0) return err(`Failed to send:\n${errors.join("\n")}`);
     return ok(`Message sent${to !== "*" ? ` to ${to}` : " to all"}.`);
   }
 
@@ -584,6 +587,39 @@ async function callAPI(conn: Connection, tool: string, args: Record<string, unkn
 }
 
 // ============================================================
+// SSE message queue — ensures ordered delivery to Claude
+// ============================================================
+
+interface QueuedMessage {
+  content: string;
+  meta: { from: string; ts: string; server: string };
+}
+
+const messageQueue: QueuedMessage[] = [];
+let draining = false;
+
+function enqueueMessage(msg: QueuedMessage) {
+  messageQueue.push(msg);
+  if (!draining) drainQueue();
+}
+
+async function drainQueue() {
+  draining = true;
+  while (messageQueue.length > 0) {
+    const msg = messageQueue.shift()!;
+    try {
+      await mcp.notification({
+        method: "notifications/claude/channel",
+        params: { content: msg.content, meta: msg.meta },
+      });
+    } catch (e) {
+      process.stderr.write(`[ct-channel] notification failed: ${e}\n`);
+    }
+  }
+  draining = false;
+}
+
+// ============================================================
 // SSE subscription (per-connection)
 // ============================================================
 
@@ -629,12 +665,9 @@ function subscribeToEvents(conn: Connection) {
               }
               // Prefix with server hostname when multiple connections active
               const prefix = connections.size > 1 ? `[${new URL(conn.url).hostname}] ` : "";
-              mcp.notification({
-                method: "notifications/claude/channel",
-                params: {
-                  content: `${prefix}${msg.content}`,
-                  meta: { from: msg.from, ts: msg.timestamp, server: conn.url },
-                },
+              enqueueMessage({
+                content: `${prefix}${msg.content}`,
+                meta: { from: msg.from, ts: msg.timestamp, server: conn.url },
               });
             } catch { /* ignore */ }
           }
@@ -663,7 +696,7 @@ function subscribeToEvents(conn: Connection) {
 // Helpers
 // ============================================================
 
-function postJSON(conn: Connection, url: string, body: Record<string, string>): Promise<void> {
+function postJSON(conn: Connection, url: string, body: Record<string, string>): Promise<string | null> {
   return new Promise((resolve) => {
     const data = JSON.stringify(body);
     const parsed = new URL(url);
@@ -676,11 +709,23 @@ function postJSON(conn: Connection, url: string, body: Record<string, string>): 
         method: "POST",
         headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data), ...getAuthHeaders(conn) },
       },
-      (res) => { res.resume(); res.on("end", resolve); }
+      (res) => {
+        let resData = "";
+        res.on("data", (chunk: Buffer) => { resData += chunk.toString(); });
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(null);
+          } else {
+            let msg = `HTTP ${res.statusCode}`;
+            try { const parsed = JSON.parse(resData); if (parsed.error) msg = parsed.error; } catch { /* use status code */ }
+            resolve(msg);
+          }
+        });
+      }
     );
     req.on("error", (e) => {
       process.stderr.write(`[ct-channel] send failed (${conn.url}): ${e.message}\n`);
-      resolve();
+      resolve(e.message);
     });
     req.write(data);
     req.end();
