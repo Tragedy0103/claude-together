@@ -1,5 +1,5 @@
 ---
-name: ct:customer-service
+name: ct:rules-init-cs
 description: Initialize customer service mode with strict rules — read-only, no guessing, no file changes.
 ---
 

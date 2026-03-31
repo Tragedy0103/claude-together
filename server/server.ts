@@ -422,12 +422,24 @@ router.get("/channel/subscribe/:peerName", (req, res) => {
     try { res.write(": heartbeat\n\n"); } catch { clearInterval(heartbeat); }
   }, 30_000);
 
+  // Kick previous subscriber with same name
+  const existing = channelSubscribers.get(peerName);
+  if (existing) {
+    try {
+      existing.res.write("data: kicked\n\n");
+      existing.res.end();
+    } catch { /* already closed */ }
+    console.log(`[channel] ${peerName} kicked (replaced by new connection)`);
+  }
+
   channelSubscribers.set(peerName, { peerName, res });
   console.log(`[channel] ${peerName} subscribed to events`);
 
   req.on("close", () => {
     clearInterval(heartbeat);
-    channelSubscribers.delete(peerName);
+    // Only delete if this is still the active subscriber (not already replaced)
+    const current = channelSubscribers.get(peerName);
+    if (current && current.res === res) channelSubscribers.delete(peerName);
     console.log(`[channel] ${peerName} unsubscribed`);
   });
 });

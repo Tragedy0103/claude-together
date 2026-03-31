@@ -636,6 +636,7 @@ function subscribeToEvents(conn: Connection) {
     transport.get(url.toString(), { headers: getAuthHeaders(conn) }, (res) => {
       conn.sse = res;
       let buffer = "";
+      let kicked = false;
 
       res.on("data", (chunk: Buffer) => {
         buffer += chunk.toString();
@@ -651,6 +652,12 @@ function subscribeToEvents(conn: Connection) {
               }
               conn.sseConnectedOnce = true;
               continue;
+            }
+            if (data === "kicked") {
+              process.stderr.write(`[ct-channel] SSE kicked from ${conn.url} (replaced by new connection), not reconnecting.\n`);
+              kicked = true;
+              conn.sse = null;
+              return;
             }
             try {
               const msg = JSON.parse(data) as { from: string; content: string; timestamp: string };
@@ -675,6 +682,7 @@ function subscribeToEvents(conn: Connection) {
       });
 
       res.on("end", () => {
+        if (kicked) return;
         process.stderr.write(`[ct-channel] SSE disconnected from ${conn.url}, reconnecting in 1s...\n`);
         setTimeout(makeRequest, 1000);
       });
